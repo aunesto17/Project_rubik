@@ -25,6 +25,7 @@ Proyecto CUBO RUBIK
 #include "figura.h"
 #include "transform.h"
 #include "helper.h"
+#include "camera.h"	
 
 
 #include "stb_image.h"	// libreria para cargar imagenes
@@ -56,6 +57,7 @@ void updateVertexBuffer();
 
 // definimos las figuras
 Cubo cubo;
+Camera camera;
 
 // Transform transC;
 // Transform transE;
@@ -332,14 +334,22 @@ int main()
         //setupCamera(float(SCR_WIDTH), float(SCR_HEIGHT));
         // Use the shader program
         
-        float distance = 10.0f;  // Adjust this based on your scene size
+        //float distance = 10.0f;  // Adjust this based on your scene size
+        float horizontalRadius = camera.distance * cos(toRadians(camera.elevation));
         float eye[3] = {
-            distance * 0.866f,  // X = distance * cos(45°) * sin(35.264°)
-            distance * 0.866f,  // Y = distance * sin(45°) * sin(35.264°)
-            distance * 0.866f   // Z = distance * cos(35.264°)
+            // distance * 0.866f,  // X = distance * cos(45°) * sin(35.264°)
+            // distance * 0.866f,  // Y = distance * sin(45°) * sin(35.264°)
+            // distance * 0.866f   // Z = distance * cos(35.264°)
+            horizontalRadius * sin(toRadians(camera.rotationAngle)),
+            camera.distance * sin(toRadians(camera.elevation)),
+            horizontalRadius * cos(toRadians(camera.rotationAngle))
         };
+        // float center[3] = {0.0f, 0.0f, 0.0f};  // Looking at origin
+        // float up[3] = {-0.866f, 0.866f, 0.0f}; // Adjusted up vector for isometric view
+        // float viewMatrix[16];
+
         float center[3] = {0.0f, 0.0f, 0.0f};  // Looking at origin
-        float up[3] = {-0.866f, 0.866f, 0.0f}; // Adjusted up vector for isometric view
+        float up[3] = {0.0f, 1.0f, 0.0f};      // World up vector
         float viewMatrix[16];
         
         // Calculate view matrix
@@ -352,15 +362,15 @@ int main()
         
         // Set up orthographic projection
         ortho(-size * aspect, size * aspect,    // left, right
-        -size, size,                      // bottom, top
-        0.1f, 100.0f,                     // near, far
-        projMatrix);
+              -size, size,                      // bottom, top
+              0.1f, 100.0f,                     // near, far
+              projMatrix);
         
         glUseProgram(shaderProgram);
 
         // Send matrices to shader
-        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, viewMatrix);
-        glUniformMatrix4fv(projLoc, 1, GL_FALSE, projMatrix);
+        glUniformMatrix4fv(viewLoc, 1, GL_TRUE, viewMatrix);
+        glUniformMatrix4fv(projLoc, 1, GL_TRUE, projMatrix);
         
         // Model matrix (identity)
         float modelMatrix[16] = {
@@ -369,7 +379,7 @@ int main()
             0.0f, 0.0f, 1.0f, 0.0f,
             0.0f, 0.0f, 0.0f, 1.0f
         };
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelMatrix);
+        glUniformMatrix4fv(modelLoc, 1, GL_TRUE, modelMatrix);
         
 
         //glUniform3f(colorLoc, pointColor.x, pointColor.y, pointColor.z);
@@ -421,6 +431,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+
     // // rotaciones X, Y, Z
     // if (key == GLFW_KEY_Z && action == GLFW_PRESS)
     // {
@@ -473,23 +484,15 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     //     updateVertexBuffer();
     // }
 
-    // // traslacion
-    // if (key == GLFW_KEY_W && action == GLFW_PRESS)
-    // {
-    //     std::cout << "Key: W - Traslacion en Y UP" << std::endl;
-    //     transC.traslacion(vec3(0.0f, 0.1f, 0.0f), casa);
-    //     transE.traslacion(vec3(0.0f, 0.1f, 0.0f), estrella);
-    //     transP.traslacion(vec3(0.0f, 0.1f, 0.0f), pizza);
-    //     updateVertexBuffer();
-    // }
-    // if (key == GLFW_KEY_S && action == GLFW_PRESS)
-    // {
-    //     std::cout << "Key: S - Traslacion en Y DOWN" << std::endl;
-    //     transC.traslacion(vec3(0.0f, -0.1f, 0.0f), casa);
-    //     transE.traslacion(vec3(0.0f, -0.1f, 0.0f), estrella);
-    //     transP.traslacion(vec3(0.0f, -0.1f, 0.0f), pizza);
-    //     updateVertexBuffer();
-    // }
+    // traslacion
+    if (key == GLFW_KEY_W && action == GLFW_PRESS)
+    {
+        camera.elevation = 35.264f;
+    }
+    if (key == GLFW_KEY_S && action == GLFW_PRESS)
+    {
+        camera.elevation = -35.264f;
+    }
 
     // if (key == GLFW_KEY_A && action == GLFW_PRESS)
     // {
@@ -507,22 +510,14 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     //     transP.traslacion(vec3(0.1f, 0.0f, 0.0f), pizza);
     //     updateVertexBuffer();
     // }
-    // if (key == GLFW_KEY_Q && action == GLFW_PRESS)
-    // {
-    //     std::cout << "Key: Q - Traslacion en Z BACK" << std::endl;
-    //     transC.traslacion(vec3(0.0f, 0.0f, -0.1f), casa);
-    //     transE.traslacion(vec3(0.0f, 0.0f, -0.1f), estrella);
-    //     transP.traslacion(vec3(0.0f, 0.0f, -0.1f), pizza);
-    //     updateVertexBuffer();
-    // }
-    // if (key == GLFW_KEY_E && action == GLFW_PRESS)
-    // {
-    //     std::cout << "Key: E - Traslacion en Z BACK" << std::endl;
-    //     transC.traslacion(vec3(0.0f, 0.0f, 0.1f), casa);
-    //     transE.traslacion(vec3(0.0f, 0.0f, 0.1f), estrella);
-    //     transP.traslacion(vec3(0.0f, 0.0f, 0.1f), pizza);
-    //     updateVertexBuffer();
-    // }
+    if (key == GLFW_KEY_Q && action == GLFW_PRESS)
+    {
+        camera.rotationAngle -= 90.0f;
+    }
+    if (key == GLFW_KEY_E && action == GLFW_PRESS)
+    {
+        camera.rotationAngle += 90.0f;
+    }
     // if (key == GLFW_KEY_R && action == GLFW_PRESS)
     // {
     //     std::cout << "Key: R - Traslacion inversa" << std::endl;

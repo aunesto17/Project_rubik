@@ -12,6 +12,10 @@ GLint viewLoc;
 GLint projLoc;
 GLint modelLoc;
 
+float toRadians(float degrees) {
+    return degrees * (M_PI / 180.0f);
+}
+
 // Helper function to normalize a vector
 void normalize(float v[3]) {
     float length = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -28,41 +32,62 @@ void cross(float v1[3], float v2[3], float result[3]) {
 }
 
 void lookAt(float eye[3], float center[3], float up[3], float matrix[16]) {
-    float f[3] = {
-        center[0] - eye[0],
-        center[1] - eye[1],
-        center[2] - eye[2]
+    // w = eye - center / ||eye - center||
+    float w[3] = { 
+        eye[0] - center[0],
+        eye[1] - center[1],
+        eye[2] - center[2] 
     };
-    normalize(f);
+    normalize(w);
 
-    // Compute s = f × up
-    float s[3];
-    cross(f, up, s);
-    normalize(s);
-
-    // Compute u = s × f
+    // u = b x w / ||b x w||
     float u[3];
-    cross(s, f, u);
+    cross(up, w, u);
+    normalize(u);
 
-    // Create the matrix
-    matrix[0] = s[0];
-    matrix[1] = u[0];
-    matrix[2] = -f[0];
-    matrix[3] = 0.0f;
+    // v = w × u
+    float v[3];
+    cross(w, u, v);
 
-    matrix[4] = s[1];
-    matrix[5] = u[1];
-    matrix[6] = -f[1];
-    matrix[7] = 0.0f;
+    // // Create the matrix
+    // matrix[0] = u[0];
+    // matrix[1] = v[0];
+    // matrix[2] = w[0];
+    // matrix[3] = 0.0f;
 
-    matrix[8] = s[2];
-    matrix[9] = u[2];
-    matrix[10] = -f[2];
-    matrix[11] = 0.0f;
+    // matrix[4] = u[1];
+    // matrix[5] = v[1];
+    // matrix[6] = w[1];
+    // matrix[7] = 0.0f;
 
-    matrix[12] = -(s[0] * eye[0] + s[1] * eye[1] + s[2] * eye[2]);
-    matrix[13] = -(u[0] * eye[0] + u[1] * eye[1] + u[2] * eye[2]);
-    matrix[14] = f[0] * eye[0] + f[1] * eye[1] + f[2] * eye[2];
+    // matrix[8] = u[2];
+    // matrix[9] = v[2];
+    // matrix[10] = w[2];
+    // matrix[11] = 0.0f;
+
+    // matrix[12] = -u[0] * eye[0] -u[1] * eye[1] -u[2] * eye[2];
+    // matrix[13] = -v[0] * eye[0] -v[1] * eye[1] -v[2] * eye[2];
+    // matrix[14] = -w[0] * eye[0] -w[1] * eye[1] -w[2] * eye[2];
+    // matrix[15] = 1.0f;
+    
+    matrix[0] = u[0];
+    matrix[1] = u[1];
+    matrix[2] = u[2];
+    matrix[3] = -u[0] * eye[0] -u[1] * eye[1] -u[2] * eye[2];
+
+    matrix[4] = v[0];
+    matrix[5] = v[1];
+    matrix[6] = v[2];
+    matrix[7] = -v[0] * eye[0] -v[1] * eye[1] -v[2] * eye[2];
+
+    matrix[8] = w[0];
+    matrix[9] = w[1];
+    matrix[10] = w[2];
+    matrix[11] = -w[0] * eye[0] -w[1] * eye[1] -w[2] * eye[2];
+
+    matrix[12] = 0.0f;
+    matrix[13] = 0.0f;
+    matrix[14] = 0.0f;
     matrix[15] = 1.0f;
 }
 
@@ -136,24 +161,44 @@ void setupCamera(float width, float height) {
 
 // Helper function for orthographic projection matrix
 void ortho(float left, float right, float bottom, float top, float near, float far, float matrix[16]) {
+    // matrix[0] = 2.0f / (right - left);
+    // matrix[1] = 0.0f;
+    // matrix[2] = 0.0f;
+    // matrix[3] = 0.0f;
+
+    // matrix[4] = 0.0f;
+    // matrix[5] = 2.0f / (top - bottom);
+    // matrix[6] = 0.0f;
+    // matrix[7] = 0.0f;
+
+    // matrix[8] = 0.0f;
+    // matrix[9] = 0.0f;
+    // matrix[10] = -2.0f / (far - near);
+    // matrix[11] = 0.0f;
+
+    // matrix[12] = -(right + left) / (right - left);
+    // matrix[13] = -(top + bottom) / (top - bottom);
+    // matrix[14] = -(far + near) / (far - near);
+    // matrix[15] = 1.0f;
+
     matrix[0] = 2.0f / (right - left);
     matrix[1] = 0.0f;
     matrix[2] = 0.0f;
-    matrix[3] = 0.0f;
+    matrix[3] = -(right + left) / (right - left);
 
     matrix[4] = 0.0f;
     matrix[5] = 2.0f / (top - bottom);
     matrix[6] = 0.0f;
-    matrix[7] = 0.0f;
+    matrix[7] = -(top + bottom) / (top - bottom);
 
     matrix[8] = 0.0f;
     matrix[9] = 0.0f;
     matrix[10] = -2.0f / (far - near);
-    matrix[11] = 0.0f;
+    matrix[11] = -(far + near) / (far - near);
 
-    matrix[12] = -(right + left) / (right - left);
-    matrix[13] = -(top + bottom) / (top - bottom);
-    matrix[14] = -(far + near) / (far - near);
+    matrix[12] = 0.0f;
+    matrix[13] = 0.0f;
+    matrix[14] = 0.0f;
     matrix[15] = 1.0f;
 }
 
