@@ -12,6 +12,17 @@ Proyecto CUBO RUBIK
 - despues tenemos que agregar texturas a cada cara
     - UCSP
 
+11/11
+1. modelado -> 26 cubos
+2. rendering/apariencia -> color, textura
+3. animacion 1 -> rotaciones camadas horizontal/vertical
+4. animacion 2 -> conectar el cubo con un solver(c++)
+    - solver:
+        - analizar el estado actual
+        - secuencia de rotaciones aplicadas a las camadas H/V
+        - rotacion +- 90, 180, 270 grados
+5. (PLUS) animacion propia
+    - traer propuesta
 main.cpp - entry point for application
 
 */
@@ -154,10 +165,51 @@ const char *fragmentShaderTexSource = "#version 330 core\n"
     "   }\n"
     
     //"   FragColor = texture(ourTexture, TexCoord) * vec4(ourColor, 1.0f);\n"
-    "   FragColor = texColor * vec4(ourColor, 1.0f);\n"     
+    "   FragColor = vec4(ourColor, 1.0f);\n"
+    //"   FragColor = texColor * vec4(ourColor, 1.0f);\n"     
     "}\0";
 
 // Function to load a texture and handle errors
+// unsigned int loadTexture(const char* path) {
+//     unsigned int texture;
+//     glGenTextures(1, &texture);
+//     glBindTexture(GL_TEXTURE_2D, texture);
+    
+//     // Set texture parameters
+//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+//     // Load image data
+//     int width, height, nrChannels;
+//     unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+    
+//     if (data) {
+//         GLenum format;
+//         if (nrChannels == 1)
+//             format = GL_RED;
+//         else if (nrChannels == 3)
+//             format = GL_RGB;
+//         else if (nrChannels == 4)
+//             format = GL_RGBA;
+
+//         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+//         glGenerateMipmap(GL_TEXTURE_2D);
+        
+//         std::cout << "Texture loaded successfully: " << path 
+//                   << " (" << width << "x" << height 
+//                   << ", " << nrChannels << " channels)" << std::endl;
+//     }
+//     else {
+//         std::cout << "Failed to load texture: " << path << std::endl;
+//         std::cout << "STB Error: " << stbi_failure_reason() << std::endl;
+//     }
+
+//     stbi_image_free(data);
+//     return texture;
+// }
+
 unsigned int loadTexture(const char* path) {
     unsigned int texture;
     glGenTextures(1, &texture);
@@ -166,28 +218,49 @@ unsigned int loadTexture(const char* path) {
     // Set texture parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     // Load image data
     int width, height, nrChannels;
-    unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+    unsigned char* data = nullptr;
+    data = stbi_load(path, &width, &height, &nrChannels, 0);
     
-    if (data) {
-        GLenum format;
-        if (nrChannels == 1)
-            format = GL_RED;
-        else if (nrChannels == 3)
-            format = GL_RGB;
-        else if (nrChannels == 4)
-            format = GL_RGBA;
 
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+    if (data != nullptr) {
+        GLenum internalFormat;
+        GLenum dataFormat;
+        if (nrChannels == 1) {
+            internalFormat = GL_RED;
+            dataFormat = GL_RED;
+        }
+        else if (nrChannels == 3) {
+            internalFormat = GL_RGB;
+            dataFormat = GL_RGB;
+        }
+        else if (nrChannels == 4) {
+            internalFormat = GL_RGBA;
+            dataFormat = GL_RGBA;
+        }
+
+        // Note the different usage of internalFormat and dataFormat
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
         
         std::cout << "Texture loaded successfully: " << path 
                   << " (" << width << "x" << height 
-                  << ", " << nrChannels << " channels)" << std::endl;
+                  << ", " << nrChannels << " channels, format: " 
+                  << (nrChannels == 4 ? "RGBA" : (nrChannels == 3 ? "RGB" : "RED")) 
+                  << ")" << std::endl;
+
+        if (data) {
+        // Print first few pixels
+        for(int i = 0; i < 4 && i < nrChannels; i++) {
+                std::cout << "Channel " << i << ": " << (int)data[i] << std::endl;
+            }
+        }
     }
     else {
         std::cout << "Failed to load texture: " << path << std::endl;
@@ -249,6 +322,9 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
+
+    // glEnable(GL_BLEND);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // ---------------------------------------
     // texturas
@@ -358,17 +434,17 @@ int main()
     checkTextureFiles();
 
     // Load each texture and check for errors
-    // textureU = loadTexture("letter-u.png");
-    // textureC = loadTexture("letter-c.png");
-    // textureS = loadTexture("letter-s.png");
-    // textureP = loadTexture("letter-p.png");
-    // textureUL = loadTexture("ucsp-logo.png");
+    textureU = loadTexture("letter-u.png");
+    textureC = loadTexture("letter-c.png");
+    textureS = loadTexture("letter-s.png");
+    textureP = loadTexture("letter-p.png");
+    textureUL = loadTexture("ucsp-logo.png");
 
-    textureU = loadTexture("container.jpg");
-    textureC = loadTexture("container.jpg");
-    textureS = loadTexture("container.jpg");
-    textureP = loadTexture("container.jpg");
-    textureUL = loadTexture("container.jpg");
+    // textureU = loadTexture("container.jpg");
+    // textureC = loadTexture("container.jpg");
+    // textureS = loadTexture("container.jpg");
+    // textureP = loadTexture("container.jpg");
+    // textureUL = loadTexture("container.jpg");
 
     // textureU = loadTexture("letter-u.png");
     // textureC = loadTexture("letter-u.png");
@@ -444,6 +520,27 @@ int main()
     int texture5Loc = glGetUniformLocation(shaderProgram, "texture5");
     int faceIndexLoc = glGetUniformLocation(shaderProgram, "faceIndex");
     
+
+    // Bind textures on corresponding texture units
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureU);  // Top/Bottom texture
+        glUniform1i(texture1Loc, 0);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, textureC);   // Left texture
+        glUniform1i(texture2Loc, 1);
+
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, textureS);   // Front texture
+        glUniform1i(texture3Loc, 2);
+
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, textureP);   // Right texture
+        glUniform1i(texture4Loc, 3);
+
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, textureUL);   // Back texture
+        glUniform1i(texture5Loc, 4);
     
     // glGenVertexArrays(1, &VAO);
 	// // glGenVertexArrays(26, VAOs);
@@ -555,26 +652,7 @@ int main()
         };
         glUniformMatrix4fv(modelLoc, 1, GL_TRUE, modelMatrix);
 
-        // Bind textures on corresponding texture units
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureU);  // Top/Bottom texture
-        glUniform1i(texture1Loc, 0);
-
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, textureC);   // Left texture
-        glUniform1i(texture2Loc, 1);
-
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D, textureS);   // Front texture
-        glUniform1i(texture3Loc, 2);
-
-        glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_2D, textureP);   // Right texture
-        glUniform1i(texture4Loc, 3);
-
-        glActiveTexture(GL_TEXTURE4);
-        glBindTexture(GL_TEXTURE_2D, textureUL);   // Back texture
-        glUniform1i(texture5Loc, 4);
+        
         
 
         //glUniform3f(colorLoc, pointColor.x, pointColor.y, pointColor.z);

@@ -80,13 +80,21 @@ private:
                    const vec3 & bottomRight,
                    const vec3 & bottomLeft,
                    std::vector<vec3> & vertBuffer){	
-        vertBuffer.push_back(topLeft);
-        vertBuffer.push_back(topRight);
-        vertBuffer.push_back(bottomLeft);
+        // vertBuffer.push_back(topLeft);
+        // vertBuffer.push_back(topRight);
+        // vertBuffer.push_back(bottomLeft);
+
+        // vertBuffer.push_back(bottomLeft);
+        // vertBuffer.push_back(bottomRight);
+        // vertBuffer.push_back(topLeft);
 
         vertBuffer.push_back(bottomLeft);
         vertBuffer.push_back(bottomRight);
+        vertBuffer.push_back(topRight);
+
+        vertBuffer.push_back(topRight);
         vertBuffer.push_back(topLeft);
+        vertBuffer.push_back(bottomLeft);
     }
 
 public:
@@ -103,25 +111,26 @@ public:
 
             // creamos las 6 caras
             // top
-            this->buildRect(vec3(-dist, dist, -dist),
-                            vec3(dist, dist, -dist),
-                            vec3(-dist, dist, dist),
+            // TL, TR, BR, BL 
+            this->buildRect(vec3(-dist, dist, dist),
                             vec3(dist, dist, dist),
+                            vec3(dist, dist, -dist),
+                            vec3(-dist, dist, -dist),
                             this->vertices);
             // Left.
             this->buildRect(
+                            vec3(-dist,  dist, dist),
                             vec3(-dist,  dist, -dist),
-                            vec3(-dist,  dist,  dist),
+                            vec3(-dist, -dist, dist),
                             vec3(-dist, -dist, -dist),
-                            vec3(-dist, -dist,  dist),
                             this->vertices);
 
             // Front.
             this->buildRect(
-                            vec3(-dist,  dist, dist),
-                            vec3( dist,  dist, dist),
-                            vec3(-dist, -dist, dist),
-                            vec3( dist, -dist, dist),
+                            vec3(-dist,  dist, -dist),
+                            vec3( dist,  dist, -dist),
+                            vec3(-dist, -dist, -dist),
+                            vec3( dist, -dist, -dist),
                             this->vertices);
 
             // Right.
@@ -134,18 +143,18 @@ public:
 
             // Back.
             this->buildRect(
-                            vec3( dist,  dist, -dist),
-                            vec3(-dist,  dist, -dist), 
-                            vec3( dist, -dist, -dist),
-                            vec3(-dist, -dist, -dist),
+                            vec3( dist,  dist, dist),
+                            vec3(-dist,  dist, dist), 
+                            vec3( dist, -dist, dist),
+                            vec3(-dist, -dist, dist),
                             this->vertices);
 
             // Down.
             this->buildRect(
                             vec3(-dist, -dist,  dist),
                             vec3( dist, -dist,  dist),
-                            vec3(-dist, -dist, -dist),
                             vec3( dist, -dist, -dist),
+                            vec3( -dist, -dist, -dist),
                             this->vertices);
 
             // translate the vertices
