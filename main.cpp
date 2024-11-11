@@ -5,9 +5,16 @@ COMPUTACION GRAFICA - 2024-II
 ALEXANDER ARTURO BAYLON IBANEZ
 
 Proyecto CUBO RUBIK
+- definir cuantos vertices por cubo
+- definir los tipos de cubos(3 colores, 2 colores, 1 color)
+    - resto de colores gris o negro
+    - solo se pintan las caras que corresponden
+- despues tenemos que agregar texturas a cada cara
+    - UCSP
+
+main.cpp - entry point for application
 
 */
-
 
 // #define GLAD_GL_IMPLEMENTATION
 // #include <glad/gl.h>
@@ -19,11 +26,12 @@ Proyecto CUBO RUBIK
 #include <random>
 #include <vector>
 #include <filesystem>
+#include <fstream> 
 
 #include "vertex.h"
 #include "matriz.h"
-#include "figura.h"
-#include "transform.h"
+#include "rubik.h"
+//#include "transform.h"
 #include "helper.h"
 #include "camera.h"	
 
@@ -36,8 +44,6 @@ void processInput(GLFWwindow *window);
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-
-
 
 static void key_callback(GLFWwindow*, int, int, int, int);
 
@@ -56,7 +62,6 @@ colorVec getRandomColor() {
 void updateVertexBuffer();
 
 // definimos las figuras
-Cubo cubo;
 Camera camera;
 
 // Transform transC;
@@ -85,7 +90,8 @@ unsigned int currentShaderProgram;
 const char *vertexShaderSource = "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
     "layout (location = 1) in vec3 aColor;\n"
-    "layout (location = 2) in vec3 aTexCoord;\n"
+    //"layout (location = 2) in vec3 aTexCoord;\n"
+    "layout (location = 2) in vec2 aTexCoord;\n"
 
     "out vec3 ourColor;\n"
     "out vec2 TexCoord;\n"
@@ -98,7 +104,8 @@ const char *vertexShaderSource = "#version 330 core\n"
     "{\n"
     "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
     "   ourColor = aColor;\n"
-    "   TexCoord = vec2(aTexCoord.x,aTexCoord.y);\n"    
+    //"   TexCoord = vec2(aTexCoord.x,aTexCoord.y);\n"    
+    "   TexCoord = vec2(aTexCoord.x,aTexCoord.y);\n"  
     "}\0";
 
 const char *fragmentShaderTexSource = "#version 330 core\n"
@@ -106,16 +113,110 @@ const char *fragmentShaderTexSource = "#version 330 core\n"
 
     "in vec3 ourColor;\n"
     "in vec2 TexCoord;\n"
+    //  textura letra U
+    "uniform sampler2D texture1;\n"
+    //  textura letra C
+    "uniform sampler2D texture2;\n"
+    //  textura letra S
+    "uniform sampler2D texture3;\n"
+    //  textura letra P
+    "uniform sampler2D texture4;\n"
+    //  textura logo
+    "uniform sampler2D texture5;\n"
 
-    "uniform sampler2D ourTexture;\n"
+    "uniform int faceIndex;\n"
 
     "void main()\n"
     "{\n"
     //"   FragColor = texture(ourTexture, TexCoord);\n"
-    "   FragColor = vec4(ourColor, 1.0f);\n"     
+    "   vec4 texColor;\n"
+    "   switch(faceIndex) {\n"
+    "       case 0:  \n"
+    "           texColor = texture(texture1, TexCoord);\n"
+    "           break;\n"
+    "       case 1:  \n"
+    "           texColor = texture(texture2, TexCoord);\n"
+    "           break;\n"
+    "       case 2:  \n"
+    "           texColor = texture(texture3, TexCoord);\n"
+    "           break;\n"
+    "       case 3:  \n"
+    "           texColor = texture(texture4, TexCoord);\n"
+    "           break;\n"
+    "       case 4:  \n"
+    "           texColor = texture(texture5, TexCoord);\n"
+    "           break;\n"
+    "       case 5:  \n"
+    "           texColor = texture(texture5, TexCoord);\n"
+    "           break;\n"
+    "       default: \n"
+    "           texColor = vec4(1.0);\n"
+    "   }\n"
+    
+    //"   FragColor = texture(ourTexture, TexCoord) * vec4(ourColor, 1.0f);\n"
+    "   FragColor = texColor * vec4(ourColor, 1.0f);\n"     
     "}\0";
 
+// Function to load a texture and handle errors
+unsigned int loadTexture(const char* path) {
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+    // Load image data
+    int width, height, nrChannels;
+    unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+    
+    if (data) {
+        GLenum format;
+        if (nrChannels == 1)
+            format = GL_RED;
+        else if (nrChannels == 3)
+            format = GL_RGB;
+        else if (nrChannels == 4)
+            format = GL_RGBA;
+
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        
+        std::cout << "Texture loaded successfully: " << path 
+                  << " (" << width << "x" << height 
+                  << ", " << nrChannels << " channels)" << std::endl;
+    }
+    else {
+        std::cout << "Failed to load texture: " << path << std::endl;
+        std::cout << "STB Error: " << stbi_failure_reason() << std::endl;
+    }
+
+    stbi_image_free(data);
+    return texture;
+}
+
+// Also check if the files exist before trying to load them
+void checkTextureFiles() {
+    const char* textureFiles[] = {
+        "letter-u.png",
+        "letter-c.png",
+        "letter-s.png",
+        "letter-p.png",
+        "ucsp-logo.png"
+    };
+
+    for (const char* file : textureFiles) {
+        std::ifstream f(file);
+        if (!f.good()) {
+            std::cout << "Texture file not found: " << file << std::endl;
+        } else {
+            std::cout << "Found texture file: " << file << std::endl;
+        }
+    }
+}
 
 int main()
 {
@@ -125,6 +226,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_DEPTH_BITS, 24);  // Request 24-bit depth buffer
 
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -132,7 +234,7 @@ int main()
 	// plataforma que empaqueta a opengl
     // glfw window creation
     // --------------------
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Project_06", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Project_Rubik", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -144,52 +246,143 @@ int main()
 
     // glad: load all OpenGL function pointers
 	gladLoadGL(glfwGetProcAddress);
-    // ---------------------------------------
-	/*
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
-	*/
-
-    // texturas
-    // ---------------------------------------
-    unsigned int texture;
-    // glGenTextures(cuantas texturas queremos generar, las guarda en este array(en este caso solo 1));
-    glGenTextures(1, &texture);
-    // bind the texture
-    glBindTexture(GL_TEXTURE_2D, texture);
-    // seteamos las opciones de envolvimiento/filtro de la textura
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // load and generate the texture
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
-    // set the texture wrapping parameters
-    //  1. texture target al objeto bindeado en el paso anterior
-    //  2. nivel de mipmap (0 por defecto)
-    //  3. formato para guardar la textura(la imagen es RGB entonces usamos GL_RGB)
-    //  4. ancho de la textura (usamos los valores ya obtenidos)
-    //  5. alto de la textura
-    //  6. siempre 0
-    //  7. formato de la imagen (RGB)
-    //  8. tipo de dato de la imagen (unsigned byte)
-    //  9. la imagen en si
-    if(data){
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    } else {
-        std::cout << "fallo en cargar textura" << std::endl;
-    }
-    // liberar la memoria de la imagen
-    stbi_image_free(data);
-
 
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
 
+    // ---------------------------------------
+    // texturas
+    // ---------------------------------------
+    unsigned int textureU, textureC, textureS, textureP, textureUL;
+    // glGenTextures(cuantas texturas queremos generar, las guarda en este array(en este caso solo 1));
+    // glGenTextures(1, &textureU);
+    // // bind the texture
+    // glBindTexture(GL_TEXTURE_2D, textureU);
+    // // seteamos las opciones de envolvimiento/filtro de la textura
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // // load and generate the texture
+    // int width, height, nrChannels;
+    // stbi_set_flip_vertically_on_load(true);
+    // unsigned char *data = stbi_load("letter-u.png", &width, &height, &nrChannels, 0);
+    // // set the texture wrapping parameters
+    // //  1. texture target al objeto bindeado en el paso anterior
+    // //  2. nivel de mipmap (0 por defecto)
+    // //  3. formato para guardar la textura(la imagen es RGB entonces usamos GL_RGB)
+    // //  4. ancho de la textura (usamos los valores ya obtenidos)
+    // //  5. alto de la textura
+    // //  6. siempre 0
+    // //  7. formato de la imagen (RGB)
+    // //  8. tipo de dato de la imagen (unsigned byte)
+    // //  9. la imagen en si
+    // if(data){
+    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    //     glGenerateMipmap(GL_TEXTURE_2D);
+    // } else {
+    //     std::cout << "fallo en cargar textura U" << std::endl;
+    // }
+    // // liberar la memoria de la imagen
+    // stbi_image_free(data);
+
+
+    // // textura C
+    // glGenTextures(1, &textureC);
+    // glBindTexture(GL_TEXTURE_2D, textureC);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // data = stbi_load("letter-c.png", &width, &height, &nrChannels, 0);
+    // if(data){
+    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    //     glGenerateMipmap(GL_TEXTURE_2D);
+    // } else {
+    //     std::cout << "fallo en cargar textura C" << std::endl;
+    // }
+    // stbi_image_free(data);
+
+    // // textura S
+    // glGenTextures(1, &textureS);
+    // glBindTexture(GL_TEXTURE_2D, textureS);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // data = stbi_load("letter-s.png", &width, &height, &nrChannels, 0);
+    // if(data){
+    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    //     glGenerateMipmap(GL_TEXTURE_2D);
+    // } else {
+    //     std::cout << "fallo en cargar textura S" << std::endl;
+    // }
+    // stbi_image_free(data);
+
+    // // textura P
+    // glGenTextures(1, &textureP);
+    // glBindTexture(GL_TEXTURE_2D, textureP);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // data = stbi_load("letter-p.png", &width, &height, &nrChannels, 0);
+    // if(data){
+    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    //     glGenerateMipmap(GL_TEXTURE_2D);
+    // } else {
+    //     std::cout << "fallo en cargar textura P" << std::endl;
+    // }
+    // stbi_image_free(data);
+
+    // // textura logo UCSP
+    // glGenTextures(1, &textureUL);
+    // glBindTexture(GL_TEXTURE_2D, textureUL);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // data = stbi_load("ucsp-logo.png", &width, &height, &nrChannels, 0);
+    // if(data){
+    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    //     glGenerateMipmap(GL_TEXTURE_2D);
+    // } else {
+    //     std::cout << "fallo en cargar textura UL" << std::endl;
+    // }
+
+    checkTextureFiles();
+
+    // Load each texture and check for errors
+    // textureU = loadTexture("letter-u.png");
+    // textureC = loadTexture("letter-c.png");
+    // textureS = loadTexture("letter-s.png");
+    // textureP = loadTexture("letter-p.png");
+    // textureUL = loadTexture("ucsp-logo.png");
+
+    textureU = loadTexture("container.jpg");
+    textureC = loadTexture("container.jpg");
+    textureS = loadTexture("container.jpg");
+    textureP = loadTexture("container.jpg");
+    textureUL = loadTexture("container.jpg");
+
+    // textureU = loadTexture("letter-u.png");
+    // textureC = loadTexture("letter-u.png");
+    // textureS = loadTexture("letter-u.png");
+    // textureP = loadTexture("letter-u.png");
+    // textureUL = loadTexture("letter-u.png");
+
+    // Verify all textures loaded successfully
+    if (textureU && textureC && textureS && textureP && textureUL) {
+        std::cout << "All textures loaded successfully!" << std::endl;
+    } else {
+        std::cout << "Failed to load one or more textures!" << std::endl;
+        // Handle error - maybe exit program or use default textures
+    }
 
     // build and compile our shader program
     // ------------------------------------
@@ -238,62 +431,43 @@ int main()
 
     // Get the location of the uniform variables for color
     int colorLoc = glGetUniformLocation(shaderProgram, "ourColor");
-	
-	
-    // posiciones iniciales de las fig
-    // for(int i=0; i<3; i++){
-    //     transC.escala(vec3(0.75f, 0.75f, 0.75f), casa);
-    // }
-    // for(int i=0; i<6; i++){
-    //     transC.traslacion(vec3(-0.1f, 0.0f, 0.0f), casa);
-    // }
-    // casa.verticesOrig = casa.vertices;
 
+    CuboRubik cuboRubik;
 
-    //glGenVertexArrays(1, &VAO);
-	glGenVertexArrays(5, VAOs);
-    //glGenBuffers(1, &VBO);
-	glGenBuffers(5, VBOs);
-    glGenBuffers(5, EBOs);
-	
-	// puntos
-	// glBindVertexArray(VAOs[0]);
-    // //glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    // // el buffer de openGL que acepta VBOs es el GL_ARRAY_BUFFER
+    // tell opengl for each sampler to which texture it belongs
+    //glUseProgram(shaderProgram);
+    //glUniform1i(glGetUniformLocation(shaderProgram, "ourTexture"), 0);
+    int texture1Loc = glGetUniformLocation(shaderProgram, "texture1");
+    int texture2Loc = glGetUniformLocation(shaderProgram, "texture2");
+    int texture3Loc = glGetUniformLocation(shaderProgram, "texture3");
+    int texture4Loc = glGetUniformLocation(shaderProgram, "texture4");
+    int texture5Loc = glGetUniformLocation(shaderProgram, "texture5");
+    int faceIndexLoc = glGetUniformLocation(shaderProgram, "faceIndex");
+    
+    
+    // glGenVertexArrays(1, &VAO);
+	// // glGenVertexArrays(26, VAOs);
+    // glGenBuffers(1, &VBO);
+	// // glGenBuffers(26, VBOs);
+    // // glGenBuffers(26, EBOs);
+
+    // // cubos
+    // glBindVertexArray(VAOs[0]);
 	// glBindBuffer(GL_ARRAY_BUFFER, VBOs[0]);
-    // // una vez asociado el VBO con el buffer entonces podemos ingresar la informacion de los vertices al buffer
-    // glBufferData(GL_ARRAY_BUFFER, casa.vertices.size() * sizeof(float), &casa.vertices[0], GL_STATIC_DRAW);
+    // glBufferData(GL_ARRAY_BUFFER, cubo.vertices.size() * sizeof(float), &cubo.vertices[0], GL_STATIC_DRAW);
     // // EBOs
     // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[0]);
-    // // aqui utilizamos un ARRAY_BUFFER para los indices del cuadrado
-    // // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicesTri), indicesTri, GL_STATIC_DRAW);
-    // // glVertexattribpointer es el encargado de decirle a openGL como debe interpretar los datos de los vertices:
-    // // el primer argumento de los vertices es la posicion que se especifico en el shader(programa) con el layout(location = 0)
-    // // el segundo argumento es el tamano del atributo, en este caso es un vec3, por lo que tiene 3 valores
-    // // el tercer argumento es el tipo de dato que se esta ingresando, en este caso es un float
-    // // el cuarto argumento es si se quiere normalizar los datos, en este caso no se normaliza
-    // // el quinto argumento es el tamano de los datos, en este caso es 3 * sizeof(float)
-    // // el sexto argumento es el offset de los datos, en este caso es 0
-    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    // glBufferData(GL_ELEMENT_ARRAY_BUFFER, cubo.indices.size() * sizeof(float), std::data(cubo.indices), GL_STATIC_DRAW);
+    // // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    // // position attribute
+    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     // glEnableVertexAttribArray(0);
-
-    // cubos
-    glBindVertexArray(VAOs[0]);
-	glBindBuffer(GL_ARRAY_BUFFER, VBOs[0]);
-    glBufferData(GL_ARRAY_BUFFER, cubo.vertices.size() * sizeof(float), &cubo.vertices[0], GL_STATIC_DRAW);
-    // EBOs
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, cubo.indices.size() * sizeof(float), std::data(cubo.indices), GL_STATIC_DRAW);
-    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    // color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    // texture coord attribute
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-	glEnableVertexAttribArray(2);
+    // // color attribute
+    // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    // glEnableVertexAttribArray(1);
+    // // texture coord attribute
+    // glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+	// glEnableVertexAttribArray(2);
 
 
     // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
@@ -303,8 +477,6 @@ int main()
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	glPointSize(10.f);
     glLineWidth(5.f);
-
-    currentShaderProgram = 4;
     
 
     // render loop
@@ -317,13 +489,14 @@ int main()
 
         glfwSetKeyCallback(window, key_callback);
 
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         // render
         // ------
 		// color del background
         //glClearColor(0.2f, 0.3f, 0.3f, 1.0f); // naranja
 		glClearColor(backgroundColor.x, backgroundColor.y, backgroundColor.z, 1.0f);
         //glClear(GL_COLOR_BUFFER_BIT);
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+        
 
         //glUseProgram(shaderProgram);
         viewLoc = glGetUniformLocation(shaderProgram, "view");
@@ -356,8 +529,9 @@ int main()
         lookAt(eye, center, up, viewMatrix);
         
         // Calculate orthographic projection matrix
-        float aspect = width / height;
-        float size = 2.0f;  // Adjust this to control zoom level
+        //float aspect = width / height;
+        float aspect = SCR_WIDTH / SCR_HEIGHT;
+        float size = 4.0f;  // Adjust this to control zoom level
         float projMatrix[16];
         
         // Set up orthographic projection
@@ -380,11 +554,33 @@ int main()
             0.0f, 0.0f, 0.0f, 1.0f
         };
         glUniformMatrix4fv(modelLoc, 1, GL_TRUE, modelMatrix);
+
+        // Bind textures on corresponding texture units
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureU);  // Top/Bottom texture
+        glUniform1i(texture1Loc, 0);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, textureC);   // Left texture
+        glUniform1i(texture2Loc, 1);
+
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, textureS);   // Front texture
+        glUniform1i(texture3Loc, 2);
+
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, textureP);   // Right texture
+        glUniform1i(texture4Loc, 3);
+
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, textureUL);   // Back texture
+        glUniform1i(texture5Loc, 4);
         
 
         //glUniform3f(colorLoc, pointColor.x, pointColor.y, pointColor.z);
-        glBindVertexArray(VAOs[0]);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        // glBindVertexArray(VAOs[0]);
+        // glDrawArrays(GL_TRIANGLES, 0, 36);
+        cuboRubik.draw(shaderProgram);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -512,11 +708,11 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     // }
     if (key == GLFW_KEY_Q && action == GLFW_PRESS)
     {
-        camera.rotationAngle -= 90.0f;
+        camera.rotationAngle -= 55.0f;
     }
     if (key == GLFW_KEY_E && action == GLFW_PRESS)
     {
-        camera.rotationAngle += 90.0f;
+        camera.rotationAngle += 55.0f;
     }
     // if (key == GLFW_KEY_R && action == GLFW_PRESS)
     // {

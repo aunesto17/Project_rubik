@@ -49,27 +49,7 @@ void lookAt(float eye[3], float center[3], float up[3], float matrix[16]) {
     float v[3];
     cross(w, u, v);
 
-    // // Create the matrix
-    // matrix[0] = u[0];
-    // matrix[1] = v[0];
-    // matrix[2] = w[0];
-    // matrix[3] = 0.0f;
-
-    // matrix[4] = u[1];
-    // matrix[5] = v[1];
-    // matrix[6] = w[1];
-    // matrix[7] = 0.0f;
-
-    // matrix[8] = u[2];
-    // matrix[9] = v[2];
-    // matrix[10] = w[2];
-    // matrix[11] = 0.0f;
-
-    // matrix[12] = -u[0] * eye[0] -u[1] * eye[1] -u[2] * eye[2];
-    // matrix[13] = -v[0] * eye[0] -v[1] * eye[1] -v[2] * eye[2];
-    // matrix[14] = -w[0] * eye[0] -w[1] * eye[1] -w[2] * eye[2];
-    // matrix[15] = 1.0f;
-    
+    // Create the matrix
     matrix[0] = u[0];
     matrix[1] = u[1];
     matrix[2] = u[2];
@@ -161,25 +141,6 @@ void setupCamera(float width, float height) {
 
 // Helper function for orthographic projection matrix
 void ortho(float left, float right, float bottom, float top, float near, float far, float matrix[16]) {
-    // matrix[0] = 2.0f / (right - left);
-    // matrix[1] = 0.0f;
-    // matrix[2] = 0.0f;
-    // matrix[3] = 0.0f;
-
-    // matrix[4] = 0.0f;
-    // matrix[5] = 2.0f / (top - bottom);
-    // matrix[6] = 0.0f;
-    // matrix[7] = 0.0f;
-
-    // matrix[8] = 0.0f;
-    // matrix[9] = 0.0f;
-    // matrix[10] = -2.0f / (far - near);
-    // matrix[11] = 0.0f;
-
-    // matrix[12] = -(right + left) / (right - left);
-    // matrix[13] = -(top + bottom) / (top - bottom);
-    // matrix[14] = -(far + near) / (far - near);
-    // matrix[15] = 1.0f;
 
     matrix[0] = 2.0f / (right - left);
     matrix[1] = 0.0f;
@@ -203,4 +164,4 @@ void ortho(float left, float right, float bottom, float top, float near, float f
 }
 
 
-#endif // FIGURA_H_
+#endif // HELPER_H_

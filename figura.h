@@ -1,336 +1,179 @@
 #ifndef FIGURA_H_
 #define FIGURA_H_
 
+// figura.h - classes to store and change the cube
+
 #include <vector>
 #include <iostream>
 #include <math.h>
+#include "vertex.h"
 
-class Figura
-{  
+class Triangle
+{
+private:
+    std::vector<vec3> vertices;
+    vec3 normal;
+    vec3 tangent;
 public:
-    std::vector<float> vertices, verticesOrig;
-    std::vector<unsigned int> indices;
-
-    Figura(){};
-    
-    void addVertex(float x, float y, float z);
-    void addIndex(unsigned int index);
-    const std::vector<float> & getVertices() const {
-        return vertices;
+    Triangle(){ this->vertices.resize(3); }
+    Triangle(vec3 v1, vec3 v2, vec3 v3){ setVertices(v1, v2, v3); }
+    void setVertices(vec3 v1, vec3 v2, vec3 v3){
+        this->vertices.at(0) = v1;
+        this->vertices.at(1) = v2;
+        this->vertices.at(2) = v3;
     }
-    const std::vector<unsigned int> & getIndices() const{
-        return indices;
+    void computeNormal() { 
+        // TODOs
     }
-
-    size_t getVerticesSize(){
-        return vertices.size();
+    vec3 getNormal() { return this->normal; }
+    vec3 getTangent() { 
+        // TODO 
     }
-
-    ssize_t getIndicesSize(){
-        return indices.size();
-    }
-
-    void updateFig(std::vector<float> v){
-        vertices = v;
-    }
-
-    void resetFig(){
-        vertices = verticesOrig;
-    }
-
-    void clearVertices();
-    void clearIndices();
-
-    ~Figura(){};
+    ~Triangle(){};
 };
 
-class Casa: public Figura
-{
+class Objeto
+{ 
+private:
+    std::string name;
+    float model[4];
+    unsigned vao;
 public:
-    unsigned int indicesTri[21] = {  // note that we start from 0!
-        0, 1, 2,  // top triangle
-        3, 4, 12,   // right sqr
-        4, 5, 12,   // right sqr
-        12, 6, 11, // middle sqr
-        6, 7, 11, // middle sqr
-        11, 8, 10, // left sqr
-        8, 9, 10  // left sqr
+    std::vector<vec3> vertices;
+    std::vector<vec3> vertexNormals;
+    std::vector<vec3> vertexTangents;
+    std::vector<vec3> defaultColors = {
+        vec3(0.9f, 0.9f, 0.9f), // UP (W).
+        vec3(0.0f, 0.5f, 0.0f), // LEFT (G).
+        vec3(0.8f, 0.0f, 0.0f), // FRONT (R).
+        vec3(0.0f, 0.0f, 0.5f), // RIGHT (B).
+        vec3(1.0f, 0.4f, 0.0f), // BACK (O).
+        vec3(0.8f, 0.8f, 0.0f)  // DOWN (Y).
     };
-
-    Casa(){
-        // coordenadas de la casa completa
-        vertices = {
-                // triangle
-                -0.5f,  0.0f, 0.0f,  // triangle left
-                0.0f,  0.75f, 0.0f,  // triangle top
-                0.5f, 0.0f, 0.0f,  // triangle right
-                // right sqr
-                0.375f,  0.0f, 0.0f,  // top right
-                0.375f, -0.75f, 0.0f,  // bottom right
-                0.125f, -0.75f, 0.0f,  // bottom left
-                // middle sqr
-                0.125f, -0.5f, 0.0f,  // bottom right
-                -0.125f, -0.5f, 0.0f,  // bottom left
-
-                // left sqr
-                -0.125f, -0.75f, 0.0f,  // bottom right
-                -0.375f, -0.75f, 0.0f,  // bottom left
-                -0.375f,  0.0f, 0.0f,  // top left
-
-                // hidden points
-                -0.125f,  0.0f, 0.0f,  // top left mid sqr
-                0.125f,  0.0f, 0.0f,  // top right mid sqr
-            };
-        
-        indices = {  // note that we start from 0!
-                0, 1, 2,  // first Triangle
-                3, 4, 5,   // right sqr
-                6, 7, 8,   // middle sqr
-                9, 10  // left sqr
-            };
-        
-        verticesOrig = vertices;
-        // std::cout << "indices size:" << std::endl;
-        // std::cout << indices.size() << std::endl;
-        // std::cout << "sizeof indicesTri:" << std::endl;
-        // std::cout << sizeof(indicesTri) << std::endl;	
+    
+    virtual void setColors(std::vector<vec3> & colors) { this->defaultColors = colors; }
+    virtual void computeVertexNormals(){
+        // TODO
     }
 
-    const std::vector<unsigned int> & getIndicesTri() const{
-        //return indicesTri;
+    Objeto(const std::string & name){
+        this->name = name;
     }
-
-    size_t getIndicesTriSize(){
-        //return indicesTri.size();
-    }
-
-    ~Casa() {};
+    std::string getName() { return this->name; }
+    unsigned getVAO() { return this->vao; }
+    //virtual float * getModel() const { return this->model; }
+    //virtual void setModel(const mat4 & model) { this->model = model; }
+    virtual std::vector<vec3> getColors() const { return this->defaultColors; } 
+    
+    //virtual void draw() = 0;  
+    ~Objeto(){};
 };
 
-class Estrella: public Figura
+
+class Cubo : public Objeto
 {
-public:
-    Estrella(){
-        const float steps = 5;
-        const float angle = 3.1415926 * 2.f;
+private:
+    float size;
 
-        // vertices interiores de la estrella
-        float xPosI = 0; float yPosI = 0.25f; float radiusI = 0.15f;
-        std::vector<float> vertInt;
-	    for(int i = 0; i < steps; i++){
-            vertInt.push_back(radiusI * cos(((angle * i)/5) + (3.1415926 / 2.f) + (2 * 3.1415926 / 10.f)));
-            vertInt.push_back(radiusI * sin(((angle * i)/5) + (3.1415926 / 2.f) + (2 * 3.1415926 / 10.f)));
-            vertInt.push_back(0.0f);
-	    }
+    void buildRect(const vec3 & topLeft,
+                   const vec3 & topRight,
+                   const vec3 & bottomRight,
+                   const vec3 & bottomLeft,
+                   std::vector<vec3> & vertBuffer){	
+        vertBuffer.push_back(topLeft);
+        vertBuffer.push_back(topRight);
+        vertBuffer.push_back(bottomLeft);
 
-        // exteriores
-	    float xPosE = 0; float yPosE = 0; float radiusE = 0.3f;
-	    std::vector<float> vertExt;
-	    for(int i = 0; i < steps; i++){
-            vertExt.push_back(radiusE * cos(((angle * i)/5) + (3.1415926 / 2.f)));
-            vertExt.push_back(radiusE * sin(((angle * i)/5) + (3.1415926 / 2.f)));
-            vertExt.push_back(0.0f);
-	    }
-        double j=0.0f;
-        for(int i=0; i<13; i+=3){
-            vertices.push_back(vertExt[i]);
-            vertices.push_back(vertExt[i+1]);
-            vertices.push_back(vertExt[i+2]);
-            // colors
-            if(j == 0){
-                vertices.push_back(1.0f);
-                vertices.push_back(0.0f);
-                vertices.push_back(0.0f);
-                j+=1.0f;
-            } else if (j==1){
-                vertices.push_back(0.0f);
-                vertices.push_back(1.0f);
-                vertices.push_back(0.0f);
-                j+=1.0f;
-            } else {
-                vertices.push_back(0.0f);
-                vertices.push_back(0.0f);
-                vertices.push_back(1.0f);
-                j=0.0f;
-            } 
-            // texture coords
-            vertices.push_back(vertExt[i]);
-            vertices.push_back(vertExt[i+1]);
-
-            vertices.push_back(vertInt[i]);
-            vertices.push_back(vertInt[i+1]);
-            vertices.push_back(vertInt[i+2]);
-            // colors
-            if(j == 0){
-                vertices.push_back(1.0f);
-                vertices.push_back(0.0f);
-                vertices.push_back(0.0f);
-                j+=1.0f;
-            } else if (j == 1){
-                vertices.push_back(0.0f);
-                vertices.push_back(1.0f);
-                vertices.push_back(0.0f);
-                j+=1.0f;
-            } else {
-                vertices.push_back(0.0f);
-                vertices.push_back(0.0f);
-                vertices.push_back(1.0f);
-                j=0.0f;
-            }
-            // texture coords
-            vertices.push_back(vertInt[i]);
-            vertices.push_back(vertInt[i+1]);
-        }
-
-        std::cout << "vertices size:" << vertices.size() << std::endl; 
-        std::cout << "vertices:" << std::endl;
-        for(int i=0; i<vertices.size(); i+=3){
-            std::cout << vertices[i] << " " << vertices[i+1] << " " << vertices[i+2] << std::endl;
-        }
-
-        indices = { 
-            0,1,2,3,4,5,6,7,8,9  
-        };
-
-        verticesOrig = vertices;
-        
+        vertBuffer.push_back(bottomLeft);
+        vertBuffer.push_back(bottomRight);
+        vertBuffer.push_back(topLeft);
     }
 
-     ~Estrella() {};
-};
-
-class Pizza : public Figura {
 public:
-    float centerX, centerY;
-    float centerZ = 0.0f;
+    Cubo(const std::string & name, float size,
+        vec3 position) : Objeto(name){
+            const unsigned numVertsPerFace = 6;
+            const unsigned numFaces = 6;
+            float dist = size / 2.0f;
+            std::vector<vec3> normals;
 
-    Pizza(float x, float y) : centerX(x), centerY(y) {
-        const float circleRadius = 0.25f;
-        int segments = 8;  // Increase or decrease for smoother or more jagged edges
-        int slices = 4;     // Number of pizza slices
+            this->size = size;
+            // reservamos memoria para los vertices
+            //this->vertices.resize(numVertsPerFace * numFaces);
 
-        // Center of the pizza
-        vertices.push_back(centerX);
-        vertices.push_back(centerY);
-        vertices.push_back(centerZ);
-
-        // Generate vertices for the circle's circumference
-        for (int i = 0; i <= segments; ++i) {
-            float angle = 2.0f * M_PI * i / segments;
-            float x = centerX + circleRadius * cos(angle);
-            float y = centerY + circleRadius * sin(angle);
-            vertices.push_back(x);
-            vertices.push_back(y);
-            vertices.push_back(0.0f);
-
-            if (i > 0) {
-                indices.push_back(0);   // Connect to center
-                indices.push_back(i);   // Current vertex
-                indices.push_back(i + 1); // Next vertex (to form triangles)
-            }
-        }
-
-        // Add lines to represent pizza slices
-        for (int i = 0; i < slices; ++i) {
-            float angle = 2.0f * M_PI * i / slices;
-            float x = centerX + circleRadius * cos(angle);
-            float y = centerY + circleRadius * sin(angle);
-
-            // Add the vertex for the slice line endpoint
-            vertices.push_back(x);  // Black color for slice lines
-            vertices.push_back(y);
-            vertices.push_back(0.0f);
-            indices.push_back(0); // Connect center to the slice line endpoint
-            indices.push_back(vertices.size() - 1);
-        }
-
-        // std::cout << "vertices size:" << vertices.size() << std::endl;
-        // std::cout << "indices size:" << indices.size() << std::endl;
-        // for(int i=0; i<vertices.size(); i+=3){
-        //     std::cout << vertices[i] << " " << vertices[i+1] << " " << vertices[i+2] << std::endl;
-        // }
-        // for(int i=0; i<indices.size(); i++){
-        //     std::cout << indices[i] << std::endl;        
-        // }
-
-        verticesOrig = vertices;
-    }
-    // const std::vector<Vertex>& getVertices() const {
-    //     return vertices;
-    // }
-};
-
-class Cubo : public Figura
-{
-public:
-    Cubo(){
-        vertices = {
-            //back (-z) green
-            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            // front (+z) blue
-            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-            0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-            -0.5f,  0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-            -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-            // left (-x) red
-            -0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f,  0.5f,  0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
-            // right (+x) orange
-            0.5f,  0.5f,  0.5f,  1.0f, 0.5f, 0.0f,  0.0f, 0.0f,
-            0.5f,  0.5f, -0.5f,  1.0f, 0.5f, 0.0f,  0.0f, 0.0f,
-            0.5f, -0.5f, -0.5f,  1.0f, 0.5f, 0.0f,  0.0f, 0.0f,
-            0.5f, -0.5f, -0.5f,  1.0f, 0.5f, 0.0f,  0.0f, 0.0f,
-            0.5f, -0.5f,  0.5f,  1.0f, 0.5f, 0.0f,  0.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 0.5f, 0.0f,  0.0f, 0.0f,
-            // bottom (-y) yellow
-            -0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            0.5f, -0.5f, 0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            0.5f, -0.5f, 0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f, -0.5f, 0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            -0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-            // top (+y) white
-            -0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,
-            0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,
-            0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,
-            -0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f,
-            -0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 1.0f,  0.0f, 0.0f
-        };
-        indices = {
-            // front
-            0, 1, 2,
-            2, 3, 0,
-            // right
-            1, 5, 6,
-            6, 2, 1,
-            // back
-            7, 6, 5,
-            5, 4, 7,
-            // left
-            4, 0, 3,
-            3, 7, 4,
-            // bottom
-            4, 5, 1,
-            1, 0, 4,
+            // creamos las 6 caras
             // top
-            3, 2, 6,
-            6, 7, 3
-        };
+            this->buildRect(vec3(-dist, dist, -dist),
+                            vec3(dist, dist, -dist),
+                            vec3(-dist, dist, dist),
+                            vec3(dist, dist, dist),
+                            this->vertices);
+            // Left.
+            this->buildRect(
+                            vec3(-dist,  dist, -dist),
+                            vec3(-dist,  dist,  dist),
+                            vec3(-dist, -dist, -dist),
+                            vec3(-dist, -dist,  dist),
+                            this->vertices);
 
-        verticesOrig = vertices;
-    }
+            // Front.
+            this->buildRect(
+                            vec3(-dist,  dist, dist),
+                            vec3( dist,  dist, dist),
+                            vec3(-dist, -dist, dist),
+                            vec3( dist, -dist, dist),
+                            this->vertices);
+
+            // Right.
+            this->buildRect(
+                            vec3(dist,  dist,  dist),
+                            vec3(dist,  dist, -dist),
+                            vec3(dist, -dist,  dist),
+                            vec3(dist, -dist, -dist),
+                            this->vertices);
+
+            // Back.
+            this->buildRect(
+                            vec3( dist,  dist, -dist),
+                            vec3(-dist,  dist, -dist), 
+                            vec3( dist, -dist, -dist),
+                            vec3(-dist, -dist, -dist),
+                            this->vertices);
+
+            // Down.
+            this->buildRect(
+                            vec3(-dist, -dist,  dist),
+                            vec3( dist, -dist,  dist),
+                            vec3(-dist, -dist, -dist),
+                            vec3( dist, -dist, -dist),
+                            this->vertices);
+
+            // translate the vertices
+            for(std::vector<vec3>::iterator vertex = this->vertices.begin();
+                vertex != this->vertices.end(); ++vertex){
+                    vertex->setX(vertex->getX() + position.getX());
+                    vertex->setY(vertex->getY() + position.getY());
+                    vertex->setZ(vertex->getZ() + position.getZ());
+            }
+
+            //std::cout << "Cubo::Cubo() - vertices.size() = " << this->vertices.size() << std::endl;
+
+
+            /*
+             TODO: crear las normales de los vertices
+            */
+
+            /*
+             TODO: crear y bindear los vertex buffers,
+                    color buffers,
+                    y normal buffers
+            */
+
+            
+        }
+
+    // destructor
+    ~Cubo(){};
 };
 
 

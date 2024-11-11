@@ -35,5 +35,27 @@ public:
 };
 
 
+class vec2
+{
+public:
+    float x, y;
+    vec2(float x = 0.0f, 
+            float y = 0.0f) : x(x), y(y) {}
+
+    std::vector<float> operator+(std::vector<float> & v)
+    {
+
+    }
+
+    float getX() const { return x; }
+    float getY() const { return y; }
+
+    void setX( float num ) { this->x = num; }
+    void setY( float num ) { this->y = num; }
+
+    ~vec2() {}
+};
+
+
 
 #endif // VERTEX_H_

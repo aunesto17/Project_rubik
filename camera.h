@@ -1,6 +1,8 @@
 #ifndef CAMERA_H_
 #define CAMERA_H_
 
+// camera.h - class to store camera information
+
 #include "helper.h"
 
 class Camera {
