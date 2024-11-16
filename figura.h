@@ -43,12 +43,12 @@ public:
     std::vector<vec3> vertexNormals;
     std::vector<vec3> vertexTangents;
     std::vector<vec3> defaultColors = {
-        vec3(0.9f, 0.9f, 0.9f), // UP (W).
-        vec3(0.0f, 0.5f, 0.0f), // LEFT (G).
-        vec3(0.8f, 0.0f, 0.0f), // FRONT (R).
-        vec3(0.0f, 0.0f, 0.5f), // RIGHT (B).
-        vec3(1.0f, 0.4f, 0.0f), // BACK (O).
-        vec3(0.8f, 0.8f, 0.0f)  // DOWN (Y).
+        vec3(1.0f, 1.0f, 1.0f), // UP (W).
+        vec3(0.0f, 155.0f/255.0f, 72.0f/255.0f), // LEFT (G).
+        vec3(183.0f/255.0f, 18.0f/255.0f, 52.0f/255.0f), // FRONT (R).
+        vec3(0.0f, 70.0f/255.0f, 173.0f/255.0f), // RIGHT (B).
+        vec3(1.0f, 88.0f/255.0f, 0.0f), // BACK (O).
+        vec3(1.0f, 213.0f/255.0f, 0.0f)  // DOWN (Y).
     };
     
     virtual void setColors(std::vector<vec3> & colors) { this->defaultColors = colors; }
@@ -74,20 +74,13 @@ class Cubo : public Objeto
 {
 private:
     float size;
+    std::array<bool, 6> activefaces;
 
     void buildRect(const vec3 & topLeft,
                    const vec3 & topRight,
                    const vec3 & bottomRight,
                    const vec3 & bottomLeft,
                    std::vector<vec3> & vertBuffer){	
-        // vertBuffer.push_back(topLeft);
-        // vertBuffer.push_back(topRight);
-        // vertBuffer.push_back(bottomLeft);
-
-        // vertBuffer.push_back(bottomLeft);
-        // vertBuffer.push_back(bottomRight);
-        // vertBuffer.push_back(topLeft);
-
         vertBuffer.push_back(bottomLeft);
         vertBuffer.push_back(bottomRight);
         vertBuffer.push_back(topRight);
@@ -99,11 +92,13 @@ private:
 
 public:
     Cubo(const std::string & name, float size,
-        vec3 position) : Objeto(name){
+        vec3 position, std::array<bool, 6> faces) : Objeto(name){
             const unsigned numVertsPerFace = 6;
             const unsigned numFaces = 6;
             float dist = size / 2.0f;
             std::vector<vec3> normals;
+
+            this->activefaces = faces;
 
             this->size = size;
             // reservamos memoria para los vertices
@@ -112,52 +107,93 @@ public:
             // creamos las 6 caras
             // top
             // TL, TR, BR, BL 
-            this->buildRect(vec3(-dist, dist, dist),
-                            vec3(dist, dist, dist),
+            // this->buildRect(vec3(-dist, dist, dist),
+            //                 vec3(dist, dist, dist),
+            //                 vec3(dist, dist, -dist),
+            //                 vec3(-dist, dist, -dist),
+            //                 this->vertices);
+            // // Left.
+            // this->buildRect(vec3(-dist,  dist, dist),
+            //                 vec3(-dist,  dist, -dist),
+            //                 vec3(-dist, -dist, -dist),
+            //                 vec3(-dist, -dist, dist),
+            //                 this->vertices);
+
+            // // Front.
+            // // TL, TR, BR, BL
+            // this->buildRect(vec3(-dist,  dist, -dist),
+            //                 vec3( dist,  dist, -dist),
+            //                 vec3( dist, -dist, -dist),
+            //                 vec3(-dist, -dist, -dist),
+            //                 this->vertices);
+
+            // // Right.
+            // this->buildRect(vec3(dist,  dist, -dist),
+            //                 vec3(dist,  dist, dist),
+            //                 vec3(dist, -dist, dist),
+            //                 vec3(dist, -dist, -dist),
+            //                 this->vertices);
+
+            // // Back.
+            // this->buildRect(vec3( dist,  dist, dist),
+            //                 vec3(-dist,  dist, dist), 
+            //                 vec3(-dist, -dist, dist),
+            //                 vec3( dist, -dist, dist),
+            //                 this->vertices);
+
+            // // Down.
+            // this->buildRect(vec3(-dist, -dist,  dist),
+            //                 vec3( dist, -dist,  dist),
+            //                 vec3( dist, -dist, -dist),
+            //                 vec3(-dist, -dist, -dist),
+            //                 this->vertices);
+            
+            // creamos las 6 caras
+            // top
+            // TL, TR, BR, BL 
+            this->buildRect(vec3(-dist, dist, -dist),
                             vec3(dist, dist, -dist),
-                            vec3(-dist, dist, -dist),
+                            vec3(dist, dist, dist),
+                            vec3(-dist, dist, dist),
                             this->vertices);
             // Left.
-            this->buildRect(
+            this->buildRect(vec3(-dist,  dist, -dist),
                             vec3(-dist,  dist, dist),
-                            vec3(-dist,  dist, -dist),
                             vec3(-dist, -dist, dist),
                             vec3(-dist, -dist, -dist),
                             this->vertices);
 
             // Front.
-            this->buildRect(
-                            vec3(-dist,  dist, -dist),
-                            vec3( dist,  dist, -dist),
-                            vec3(-dist, -dist, -dist),
-                            vec3( dist, -dist, -dist),
-                            this->vertices);
-
-            // Right.
-            this->buildRect(
-                            vec3(dist,  dist,  dist),
-                            vec3(dist,  dist, -dist),
-                            vec3(dist, -dist,  dist),
-                            vec3(dist, -dist, -dist),
-                            this->vertices);
-
-            // Back.
-            this->buildRect(
+            // TL, TR, BR, BL
+            this->buildRect(vec3(-dist,  dist, dist),
                             vec3( dist,  dist, dist),
-                            vec3(-dist,  dist, dist), 
                             vec3( dist, -dist, dist),
                             vec3(-dist, -dist, dist),
                             this->vertices);
 
-            // Down.
-            this->buildRect(
-                            vec3(-dist, -dist,  dist),
-                            vec3( dist, -dist,  dist),
-                            vec3( dist, -dist, -dist),
-                            vec3( -dist, -dist, -dist),
+            // Right.
+            this->buildRect(vec3(dist,  dist, dist),
+                            vec3(dist,  dist, -dist),
+                            vec3(dist, -dist, -dist),
+                            vec3(dist, -dist, dist),
                             this->vertices);
 
-            // translate the vertices
+            // Back.
+            // TL, TR, BR, BL
+            this->buildRect(vec3( dist,  dist, -dist),
+                            vec3(-dist,  dist, -dist), 
+                            vec3(-dist, -dist, -dist),
+                            vec3( dist, -dist, -dist),
+                            this->vertices);
+
+            // Down.
+            this->buildRect(vec3(-dist, -dist,  dist),
+                            vec3( dist, -dist,  dist),
+                            vec3( dist, -dist, -dist),
+                            vec3(-dist, -dist, -dist),
+                            this->vertices);
+
+            // translate the vertices to position
             for(std::vector<vec3>::iterator vertex = this->vertices.begin();
                 vertex != this->vertices.end(); ++vertex){
                     vertex->setX(vertex->getX() + position.getX());
@@ -181,6 +217,8 @@ public:
             
         }
 
+    // return active faces 
+    virtual std::array<bool, 6> getActiveFaces() const { return this->activefaces; }
     // destructor
     ~Cubo(){};
 };

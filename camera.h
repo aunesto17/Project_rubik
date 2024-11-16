@@ -8,7 +8,7 @@
 class Camera {
 public:
     float distance = 10.0f;      // Distance from center
-    float rotationAngle = 45.0f;  // Current rotation angle around Y axis
+    float rotationAngle = 5.0f;  // Current rotation angle around Y axis
     float elevation = 35.264f;   // Elevation angle (standard isometric is about 35.264 degrees)
     float autoRotateSpeed = 0.5f;// Degrees per frame for auto-rotation (0 to disable)
     bool isAutoRotating = false; // Toggle for auto-rotation

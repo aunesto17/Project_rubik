@@ -45,9 +45,8 @@ main.cpp - entry point for application
 //#include "transform.h"
 #include "helper.h"
 #include "camera.h"	
-
-
 #include "stb_image.h"	// libreria para cargar imagenes
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height); //dimensionar la pantalla
 void processInput(GLFWwindow *window); 
@@ -106,17 +105,20 @@ const char *vertexShaderSource = "#version 330 core\n"
 
     "out vec3 ourColor;\n"
     "out vec2 TexCoord;\n"
+    "flat out int vFaceIndex;\n"
 
     "uniform mat4 model;\n"
     "uniform mat4 view;\n"
     "uniform mat4 projection;\n"
+    "uniform int faceIndex;\n"
 
     "void main()\n"
     "{\n"
     "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
     "   ourColor = aColor;\n"
     //"   TexCoord = vec2(aTexCoord.x,aTexCoord.y);\n"    
-    "   TexCoord = vec2(aTexCoord.x,aTexCoord.y);\n"  
+    "   TexCoord = vec2(aTexCoord.x,aTexCoord.y);\n"
+    "   vFaceIndex = faceIndex;\n"  
     "}\0";
 
 const char *fragmentShaderTexSource = "#version 330 core\n"
@@ -143,19 +145,19 @@ const char *fragmentShaderTexSource = "#version 330 core\n"
     "   vec4 texColor;\n"
     "   switch(faceIndex) {\n"
     "       case 0:  \n"
-    "           texColor = texture(texture1, TexCoord);\n"
+    "           texColor = texture(texture5, TexCoord);\n"
     "           break;\n"
     "       case 1:  \n"
-    "           texColor = texture(texture2, TexCoord);\n"
-    "           break;\n"
-    "       case 2:  \n"
-    "           texColor = texture(texture3, TexCoord);\n"
-    "           break;\n"
-    "       case 3:  \n"
     "           texColor = texture(texture4, TexCoord);\n"
     "           break;\n"
+    "       case 2:  \n"
+    "           texColor = texture(texture1, TexCoord);\n"
+    "           break;\n"
+    "       case 3:  \n"
+    "           texColor = texture(texture2, TexCoord);\n"
+    "           break;\n"
     "       case 4:  \n"
-    "           texColor = texture(texture5, TexCoord);\n"
+    "           texColor = texture(texture3, TexCoord);\n"
     "           break;\n"
     "       case 5:  \n"
     "           texColor = texture(texture5, TexCoord);\n"
@@ -165,52 +167,41 @@ const char *fragmentShaderTexSource = "#version 330 core\n"
     "   }\n"
     
     //"   FragColor = texture(ourTexture, TexCoord) * vec4(ourColor, 1.0f);\n"
-    "   FragColor = vec4(ourColor, 1.0f);\n"
-    //"   FragColor = texColor * vec4(ourColor, 1.0f);\n"     
+    //"   FragColor = vec4(ourColor, 1.0f);\n"
+    //"   FragColor = texColor * vec4(ourColor, 1.0f);\n"
+        "// Handle transparency and color blending\n"
+        "if(texColor.a < 0.1) {\n"
+        "    // If mostly transparent, use the face color\n"
+        "    FragColor = vec4(ourColor, 1.0);\n"
+        "} else {\n"
+        "    // Otherwise blend the texture with the face color\n"
+        //"    vec3 blendedColor = mix(ourColor, texColor.rgb, texColor.a);\n"
+        "    vec3 blendedColor = mix(ourColor, texColor.rgb, 0.25);\n"
+        "    FragColor = vec4(blendedColor, 1.0);\n"
+        "}\n"     
     "}\0";
 
-// Function to load a texture and handle errors
-// unsigned int loadTexture(const char* path) {
-//     unsigned int texture;
-//     glGenTextures(1, &texture);
-//     glBindTexture(GL_TEXTURE_2D, texture);
-    
-//     // Set texture parameters
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-//     // Load image data
-//     int width, height, nrChannels;
-//     unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
-    
-//     if (data) {
-//         GLenum format;
-//         if (nrChannels == 1)
-//             format = GL_RED;
-//         else if (nrChannels == 3)
-//             format = GL_RGB;
-//         else if (nrChannels == 4)
-//             format = GL_RGBA;
-
-//         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-//         glGenerateMipmap(GL_TEXTURE_2D);
-        
-//         std::cout << "Texture loaded successfully: " << path 
-//                   << " (" << width << "x" << height 
-//                   << ", " << nrChannels << " channels)" << std::endl;
-//     }
-//     else {
-//         std::cout << "Failed to load texture: " << path << std::endl;
-//         std::cout << "STB Error: " << stbi_failure_reason() << std::endl;
-//     }
-
-//     stbi_image_free(data);
-//     return texture;
-// }
-
 unsigned int loadTexture(const char* path) {
+    // Print current working directory
+    std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;
+    std::cout << "Attempting to load texture: " << path << std::endl;
+
+    // Check if file exists
+    std::ifstream f(path);
+    if (!f.good()) {
+        std::cout << "Error: File does not exist!" << std::endl;
+        return 0;
+    }
+
+    // Get file size
+    f.seekg(0, std::ios::end);
+    size_t fileSize = f.tellg();
+    f.close();
+    std::cout << "File size: " << fileSize << " bytes" << std::endl;
+
+    // Flip textures if needed
+    stbi_set_flip_vertically_on_load(true);
+
     unsigned int texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -218,18 +209,28 @@ unsigned int loadTexture(const char* path) {
     // Set texture parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glGenerateMipmap(GL_TEXTURE_2D);
 
     // Load image data
     int width, height, nrChannels;
-    unsigned char* data = nullptr;
-    data = stbi_load(path, &width, &height, &nrChannels, 0);
+    unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
     
+    if (data) {
+        std::cout << "Image loaded successfully:" << std::endl;
+        std::cout << "Width: " << width << std::endl;
+        std::cout << "Height: " << height << std::endl;
+        std::cout << "Channels: " << nrChannels << std::endl;
+        
+        // Print first few pixels of the image
+            // std::cout << "First 16 bytes of image data:" << std::endl;
+            // for(int i = 0; i < 16 && i < width * height * nrChannels; i++) {
+            //     std::cout << (int)data[i] << " ";
+            //     if((i + 1) % 4 == 0) std::cout << std::endl;
+            // }
 
-
-    if (data != nullptr) {
         GLenum internalFormat;
         GLenum dataFormat;
         if (nrChannels == 1) {
@@ -245,22 +246,15 @@ unsigned int loadTexture(const char* path) {
             dataFormat = GL_RGBA;
         }
 
-        // Note the different usage of internalFormat and dataFormat
         glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
         
-        std::cout << "Texture loaded successfully: " << path 
-                  << " (" << width << "x" << height 
-                  << ", " << nrChannels << " channels, format: " 
-                  << (nrChannels == 4 ? "RGBA" : (nrChannels == 3 ? "RGB" : "RED")) 
-                  << ")" << std::endl;
-
-        if (data) {
-        // Print first few pixels
-        for(int i = 0; i < 4 && i < nrChannels; i++) {
-                std::cout << "Channel " << i << ": " << (int)data[i] << std::endl;
-            }
+        // Check for OpenGL errors
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::cout << "OpenGL error after texture creation: " << err << std::endl;
         }
+
+        glGenerateMipmap(GL_TEXTURE_2D);
     }
     else {
         std::cout << "Failed to load texture: " << path << std::endl;
@@ -323,117 +317,17 @@ int main()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
-    // glEnable(GL_BLEND);
-    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // ---------------------------------------
     // texturas
     // ---------------------------------------
     unsigned int textureU, textureC, textureS, textureP, textureUL;
-    // glGenTextures(cuantas texturas queremos generar, las guarda en este array(en este caso solo 1));
-    // glGenTextures(1, &textureU);
-    // // bind the texture
-    // glBindTexture(GL_TEXTURE_2D, textureU);
-    // // seteamos las opciones de envolvimiento/filtro de la textura
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // // load and generate the texture
-    // int width, height, nrChannels;
-    // stbi_set_flip_vertically_on_load(true);
-    // unsigned char *data = stbi_load("letter-u.png", &width, &height, &nrChannels, 0);
-    // // set the texture wrapping parameters
-    // //  1. texture target al objeto bindeado en el paso anterior
-    // //  2. nivel de mipmap (0 por defecto)
-    // //  3. formato para guardar la textura(la imagen es RGB entonces usamos GL_RGB)
-    // //  4. ancho de la textura (usamos los valores ya obtenidos)
-    // //  5. alto de la textura
-    // //  6. siempre 0
-    // //  7. formato de la imagen (RGB)
-    // //  8. tipo de dato de la imagen (unsigned byte)
-    // //  9. la imagen en si
-    // if(data){
-    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    //     glGenerateMipmap(GL_TEXTURE_2D);
-    // } else {
-    //     std::cout << "fallo en cargar textura U" << std::endl;
-    // }
-    // // liberar la memoria de la imagen
-    // stbi_image_free(data);
 
+    //checkTextureFiles();
 
-    // // textura C
-    // glGenTextures(1, &textureC);
-    // glBindTexture(GL_TEXTURE_2D, textureC);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // data = stbi_load("letter-c.png", &width, &height, &nrChannels, 0);
-    // if(data){
-    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    //     glGenerateMipmap(GL_TEXTURE_2D);
-    // } else {
-    //     std::cout << "fallo en cargar textura C" << std::endl;
-    // }
-    // stbi_image_free(data);
-
-    // // textura S
-    // glGenTextures(1, &textureS);
-    // glBindTexture(GL_TEXTURE_2D, textureS);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // data = stbi_load("letter-s.png", &width, &height, &nrChannels, 0);
-    // if(data){
-    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    //     glGenerateMipmap(GL_TEXTURE_2D);
-    // } else {
-    //     std::cout << "fallo en cargar textura S" << std::endl;
-    // }
-    // stbi_image_free(data);
-
-    // // textura P
-    // glGenTextures(1, &textureP);
-    // glBindTexture(GL_TEXTURE_2D, textureP);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // data = stbi_load("letter-p.png", &width, &height, &nrChannels, 0);
-    // if(data){
-    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    //     glGenerateMipmap(GL_TEXTURE_2D);
-    // } else {
-    //     std::cout << "fallo en cargar textura P" << std::endl;
-    // }
-    // stbi_image_free(data);
-
-    // // textura logo UCSP
-    // glGenTextures(1, &textureUL);
-    // glBindTexture(GL_TEXTURE_2D, textureUL);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    // data = stbi_load("ucsp-logo.png", &width, &height, &nrChannels, 0);
-    // if(data){
-    //     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    //     glGenerateMipmap(GL_TEXTURE_2D);
-    // } else {
-    //     std::cout << "fallo en cargar textura UL" << std::endl;
-    // }
-
-    checkTextureFiles();
-
-    // Load each texture and check for errors
+    //Load each texture and check for errors
     textureU = loadTexture("letter-u.png");
     textureC = loadTexture("letter-c.png");
     textureS = loadTexture("letter-s.png");
@@ -511,7 +405,7 @@ int main()
     CuboRubik cuboRubik;
 
     // tell opengl for each sampler to which texture it belongs
-    //glUseProgram(shaderProgram);
+    glUseProgram(shaderProgram);
     //glUniform1i(glGetUniformLocation(shaderProgram, "ourTexture"), 0);
     int texture1Loc = glGetUniformLocation(shaderProgram, "texture1");
     int texture2Loc = glGetUniformLocation(shaderProgram, "texture2");
@@ -519,28 +413,43 @@ int main()
     int texture4Loc = glGetUniformLocation(shaderProgram, "texture4");
     int texture5Loc = glGetUniformLocation(shaderProgram, "texture5");
     int faceIndexLoc = glGetUniformLocation(shaderProgram, "faceIndex");
+
+    // Set texture units
+    glUniform1i(texture1Loc, 0); // Texture unit 0
+    glUniform1i(texture2Loc, 1); // Texture unit 1
+    glUniform1i(texture3Loc, 2); // Texture unit 2
+    glUniform1i(texture4Loc, 3); // Texture unit 3
+    glUniform1i(texture5Loc, 4); // Texture unit 4
+
+    // Print uniform locations to verify they were found
+    std::cout << "Texture uniform locations: " 
+            << texture1Loc << ", " 
+            << texture2Loc << ", "
+            << texture3Loc << ", "
+            << texture4Loc << ", "
+            << texture5Loc << std::endl;
     
+    // // Bind textures on corresponding texture units
+    // glActiveTexture(GL_TEXTURE0);
+    // glBindTexture(GL_TEXTURE_2D, textureU);  // Top/Bottom texture
+    // glUniform1i(texture1Loc, 0);
 
-    // Bind textures on corresponding texture units
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureU);  // Top/Bottom texture
-        glUniform1i(texture1Loc, 0);
+    // glActiveTexture(GL_TEXTURE1);
+    // glBindTexture(GL_TEXTURE_2D, textureC);   // Left texture
+    // glUniform1i(texture2Loc, 1);
 
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, textureC);   // Left texture
-        glUniform1i(texture2Loc, 1);
+    // glActiveTexture(GL_TEXTURE2);
+    // glBindTexture(GL_TEXTURE_2D, textureS);   // Front texture
+    // glUniform1i(texture3Loc, 2);
 
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D, textureS);   // Front texture
-        glUniform1i(texture3Loc, 2);
+    // glActiveTexture(GL_TEXTURE3);
+    // glBindTexture(GL_TEXTURE_2D, textureP);   // Right texture
+    // glUniform1i(texture4Loc, 3);
 
-        glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_2D, textureP);   // Right texture
-        glUniform1i(texture4Loc, 3);
-
-        glActiveTexture(GL_TEXTURE4);
-        glBindTexture(GL_TEXTURE_2D, textureUL);   // Back texture
-        glUniform1i(texture5Loc, 4);
+    // glActiveTexture(GL_TEXTURE4);
+    // glBindTexture(GL_TEXTURE_2D, textureUL);   // Back texture
+    // glUniform1i(texture5Loc, 4);
+    
     
     // glGenVertexArrays(1, &VAO);
 	// // glGenVertexArrays(26, VAOs);
@@ -653,11 +562,22 @@ int main()
         glUniformMatrix4fv(modelLoc, 1, GL_TRUE, modelMatrix);
 
         
-        
+        // Bind textures on corresponding texture units
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureU);  // Top/Bottom texture
 
-        //glUniform3f(colorLoc, pointColor.x, pointColor.y, pointColor.z);
-        // glBindVertexArray(VAOs[0]);
-        // glDrawArrays(GL_TRIANGLES, 0, 36);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, textureC);   // Left texture
+
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, textureS);   // Front texture
+
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, textureP);   // Right texture
+
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, textureUL);   // Back texture
+        
         cuboRubik.draw(shaderProgram);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
