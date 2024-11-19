@@ -10,6 +10,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include "stb_image.h"	// libreria para cargar imagenes
+
+
 // Matrix locations
 GLint viewLoc;
 GLint projLoc;
@@ -166,5 +171,109 @@ void ortho(float left, float right, float bottom, float top, float near, float f
     matrix[15] = 1.0f;
 }
 
+unsigned int loadTexture(const char* path) {
+    // Print current working directory
+    std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;
+    std::cout << "Attempting to load texture: " << path << std::endl;
+
+    // Check if file exists
+    std::ifstream f(path);
+    if (!f.good()) {
+        std::cout << "Error: File does not exist!" << std::endl;
+        return 0;
+    }
+
+    // Get file size
+    f.seekg(0, std::ios::end);
+    size_t fileSize = f.tellg();
+    f.close();
+    std::cout << "File size: " << fileSize << " bytes" << std::endl;
+
+    // Flip textures if needed
+    stbi_set_flip_vertically_on_load(true);
+
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    // Load image data
+    int width, height, nrChannels;
+    unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+    
+    if (data) {
+        std::cout << "Image loaded successfully:" << std::endl;
+        std::cout << "Width: " << width << std::endl;
+        std::cout << "Height: " << height << std::endl;
+        std::cout << "Channels: " << nrChannels << std::endl;
+        
+        // Print first few pixels of the image
+            // std::cout << "First 16 bytes of image data:" << std::endl;
+            // for(int i = 0; i < 16 && i < width * height * nrChannels; i++) {
+            //     std::cout << (int)data[i] << " ";
+            //     if((i + 1) % 4 == 0) std::cout << std::endl;
+            // }
+
+        GLenum internalFormat;
+        GLenum dataFormat;
+        if (nrChannels == 1) {
+            internalFormat = GL_RED;
+            dataFormat = GL_RED;
+        }
+        else if (nrChannels == 3) {
+            internalFormat = GL_RGB;
+            dataFormat = GL_RGB;
+        }
+        else if (nrChannels == 4) {
+            internalFormat = GL_RGBA;
+            dataFormat = GL_RGBA;
+        }
+
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
+        
+        // Check for OpenGL errors
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::cout << "OpenGL error after texture creation: " << err << std::endl;
+        }
+
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else {
+        std::cout << "Failed to load texture: " << path << std::endl;
+        std::cout << "STB Error: " << stbi_failure_reason() << std::endl;
+    }
+
+    stbi_image_free(data);
+    return texture;
+}
+
+
+// Also check if the files exist before trying to load them
+void checkTextureFiles() {
+    const char* textureFiles[] = {
+        "letter-u.png",
+        "letter-c.png",
+        "letter-s.png",
+        "letter-p.png",
+        "ucsp-logo.png"
+    };
+
+    for (const char* file : textureFiles) {
+        std::ifstream f(file);
+        if (!f.good()) {
+            std::cout << "Texture file not found: " << file << std::endl;
+        } else {
+            std::cout << "Found texture file: " << file << std::endl;
+        }
+    }
+}
 
 #endif // HELPER_H_

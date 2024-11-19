@@ -40,6 +40,8 @@ public:
     ~Camera() {}
 };
 
+
+
 #endif // CAMERA_H_
 
 
