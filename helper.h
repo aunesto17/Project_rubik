@@ -276,4 +276,19 @@ void checkTextureFiles() {
     }
 }
 
+void snapToGrid(vec3& vertex, float gridSize = 1.02f) {
+    // Round to nearest grid position
+    vertex.x = round(vertex.x / gridSize) * gridSize;
+    vertex.y = round(vertex.y / gridSize) * gridSize;
+    vertex.z = round(vertex.z / gridSize) * gridSize;
+}
+
+// Add this helper function
+float normalizeAngle(float angle) {
+    // Normalize angle to -180 to 180 range
+    while (angle > 180.0f) angle -= 360.0f;
+    while (angle < -180.0f) angle += 360.0f;
+    return angle;
+}
+
 #endif // HELPER_H_

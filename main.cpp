@@ -48,6 +48,8 @@ main.cpp - entry point for application
 //#include "transform.h"
 #include "helper.h"
 #include "camera.h"	
+#include "solver/solve.h"
+#include "solver/random.h"
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height); //dimensionar la pantalla
@@ -56,9 +58,6 @@ void processInput(GLFWwindow *window);
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-
-float lastFrame = 0.0f;
-float deltaTime = 0.0f;
 
 static void key_callback(GLFWwindow*, int, int, int, int); //callback para las teclas
 
@@ -74,11 +73,19 @@ colorVec getRandomColor() {
     return colorVec(dis(gen), dis(gen), dis(gen));
 }
 
-void updateVertexBuffer();
-
 // definimos las figuras
-CuboRubik cuboRubik;
+CuboRubik cuboRubik(glfwGetTime());
 Camera camera;
+
+float lastFrame = 0.0f;
+float deltaTime = 0.0f;
+float currentFrame = 0.0f;
+
+//cuboRubik.setLastFrameTime();
+
+// para el solver
+std::vector<std::string> movreg;
+std::vector<std::string> solvedCube;
 
 // initial colors
 colorVec backgroundColor(0.0f, 0.0f, 0.0f); // white background
@@ -300,12 +307,19 @@ int main()
     // point and line sizes
 	glPointSize(10.f);
     glLineWidth(5.f);
+
+    // cam variables
+    float cameraSpeed = 0.05f;
+    bool unaPrueba=true;
     
 
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
     {
+        currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;   
         // input
         glfwSetKeyCallback(window, key_callback);
 
@@ -314,43 +328,53 @@ int main()
         // ------
 		// color del background
 		glClearColor(backgroundColor.x, backgroundColor.y, backgroundColor.z, 1.0f);
-        
+
+        cuboRubik.updateAnimation(currentFrame);
+
         viewLoc = glGetUniformLocation(shaderProgram, "view");
         projLoc = glGetUniformLocation(shaderProgram, "projection");
         modelLoc = glGetUniformLocation(shaderProgram, "model");
         
-        // Set up camera
-        float horizontalRadius = camera.distance * cos(toRadians(camera.elevation));
-        float eye[3] = {
-            horizontalRadius * sin(toRadians(camera.rotationAngle)),
-            camera.distance * sin(toRadians(camera.elevation)),
-            horizontalRadius * cos(toRadians(camera.rotationAngle))
-        };
+        float viewMatrix[16], projMatrix[16];
+        camera.getViewMatrix(viewMatrix);
 
-        float center[3] = {0.0f, 0.0f, 0.0f};  // Looking at origin
-        float up[3] = {0.0f, 1.0f, 0.0f};      // World up vector
-        float viewMatrix[16];
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+        float aspectRatio = (float)width / (float)height;
+    
+        camera.getPerspectiveMatrix(aspectRatio, projMatrix);
+        // // Set up camera
+        // float horizontalRadius = camera.distance * cos(toRadians(camera.elevation));
+        // float eye[3] = {
+        //     horizontalRadius * sin(toRadians(camera.rotationAngle)),
+        //     camera.distance * sin(toRadians(camera.elevation)),
+        //     horizontalRadius * cos(toRadians(camera.rotationAngle))
+        // };
+
+        // float center[3] = {0.0f, 0.0f, 0.0f};  // Looking at origin
+        // float up[3] = {0.0f, 1.0f, 0.0f};      // World up vector
+        // float viewMatrix[16];
         
-        // Calculate view matrix
-        lookAt(eye, center, up, viewMatrix);
+        // // Calculate view matrix
+        // lookAt(eye, center, up, viewMatrix);
         
-        // Calculate orthographic projection matrix
-        float aspect = SCR_WIDTH / SCR_HEIGHT;
-        float size = 4.0f;  // Adjust this to control zoom level
-        float projMatrix[16];
+        // // Calculate orthographic projection matrix
+        // float aspect = SCR_WIDTH / SCR_HEIGHT;
+        // float size = 4.0f;  // Adjust this to control zoom level
+        // float projMatrix[16];
         
-        // Set up orthographic projection
-        ortho(-size * aspect, size * aspect,    // left, right
-              -size, size,                      // bottom, top
-              0.1f, 100.0f,                     // near, far
-              projMatrix);
+        // // Set up orthographic projection
+        // ortho(-size * aspect, size * aspect,    // left, right
+        //       -size, size,                      // bottom, top
+        //       0.1f, 100.0f,                     // near, far
+        //       projMatrix);
 
         
         glUseProgram(shaderProgram);
 
         // Send matrices to shader
-        glUniformMatrix4fv(viewLoc, 1, GL_TRUE, viewMatrix);
-        glUniformMatrix4fv(projLoc, 1, GL_TRUE, projMatrix);
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, viewMatrix);
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, projMatrix);
         
         // Model matrix (identity)
         float modelMatrix[16] = {
@@ -378,6 +402,7 @@ int main()
         glActiveTexture(GL_TEXTURE4);
         glBindTexture(GL_TEXTURE_2D, textureUL);   // Back texture
         
+
         cuboRubik.draw(shaderProgram);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -399,84 +424,121 @@ int main()
 // mejor forma de detectar eventos de teclado y que la reaccion de pollEvents sea eficiente.
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    
+    //float currentFrame = glfwGetTime();
+    //deltaTime = currentFrame - lastFrame;
+    //lastFrame = currentFrame;
+
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 
-    // move camera
-    if (key == GLFW_KEY_W && action == GLFW_PRESS)
-    {
-        camera.elevation = 35.264f;
+    // Camera controls
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
+        camera.moveForward(deltaTime);
+        //std::cout<<"W delta: "<< deltaTime <<std::endl;
     }
-    if (key == GLFW_KEY_S && action == GLFW_PRESS)
-    {
-        camera.elevation = -35.264f;
-    }
-    if (key == GLFW_KEY_Q && action == GLFW_PRESS)
-    {
-        camera.rotationAngle -= 55.0f;
-    }
-    if (key == GLFW_KEY_E && action == GLFW_PRESS)
-    {
-        camera.rotationAngle += 55.0f;
-    }
+        
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.moveBackward(deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.moveLeft(deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera.moveRight(deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+        camera.zoomIn(deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+        camera.zoomOut(deltaTime);
 
+    // scramble cube
+    if (glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS){
+        // empty current moves
+        movreg.clear();
+        movreg = cuboRubik.scrambleCube(60);
+    }
+        
+    // solve cube
+    if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS){
+        string tempo1 = to_cube_not(movreg);
+        movreg.clear();
+        solvedCube=get_solution(tempo1);
+        for(int i=0;i<solvedCube.size();++i){
+            cout<<solvedCube[i]<<" ";
+        }
+        std::cout<<std::endl;
+        //exeanimation(solvedCube,window);
+        cuboRubik.moveFromList(solvedCube);
+    }
+        
 
     // rotate cube faces
     if (key == GLFW_KEY_T && action == GLFW_PRESS)
     {
-        cuboRubik.rotateFace('U', -90.0f);
+        //cuboRubik.rotateFace('U', -90.0f);
+        cuboRubik.rotateU();
+        movreg.push_back("U");
+    }
+    if (key == GLFW_KEY_U && action == GLFW_PRESS)
+    {
+        //cuboRubik.rotateFace('U', -90.0f);
+        cuboRubik.rotateUPrime();
     }
     if (key == GLFW_KEY_R && action == GLFW_PRESS)
     {
-        cuboRubik.rotateFace('L', -90.0f);
+        cuboRubik.rotateL(); // clockwise
+        movreg.push_back("L");
     }
     if (key == GLFW_KEY_F && action == GLFW_PRESS)
     {
-        cuboRubik.rotateFace('F', -90.0f);
+        cuboRubik.rotateF(); // clockwise
+        movreg.push_back("F");
     }
     if (key == GLFW_KEY_G && action == GLFW_PRESS)
     {
-        cuboRubik.rotateFace('R', -90.0f);
+        cuboRubik.rotateR(); // clockwise
+        movreg.push_back("R");
     }
     if (key == GLFW_KEY_Y && action == GLFW_PRESS)
     {
-        cuboRubik.rotateFace('B', -90.0f);
+        cuboRubik.rotateB(); // clockwise
+        movreg.push_back("B");
     }
     if (key == GLFW_KEY_H && action == GLFW_PRESS)
     {
-        cuboRubik.rotateFace('D', -90.0f);
+        cuboRubik.rotateD(); // clockwise
+        movreg.push_back("D");
     }
     // rotate cube slices
     if (key == GLFW_KEY_V && action == GLFW_PRESS)
     {
-        cuboRubik.rotateSlice('V', -90.0f);
+        cuboRubik.rotateSV(); // clockwise
     }
     if (key == GLFW_KEY_B && action == GLFW_PRESS)
     {
-        cuboRubik.rotateSlice('H', -90.0f);
+        cuboRubik.rotateSH(); // clockwise
     }
     if (key == GLFW_KEY_N && action == GLFW_PRESS)
     {
-        cuboRubik.rotateSlice('S', -90.0f);
+        cuboRubik.rotateSS(); // clockwise
     }
+
+
 
     
     // change display mode to lines only
-    if(key == GLFW_KEY_I && action == GLFW_PRESS){
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-    // change display mode to fill only
-    if(key == GLFW_KEY_O && action == GLFW_PRESS){
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    }
-    // change display mode to points only 
-    if(key == GLFW_KEY_P && action == GLFW_PRESS){
-        glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
-    }
+    // if(key == GLFW_KEY_I && action == GLFW_PRESS){
+    //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // }
+    // // change display mode to fill only
+    // if(key == GLFW_KEY_O && action == GLFW_PRESS){
+    //     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    // }
+    // // change display mode to points only 
+    // if(key == GLFW_KEY_P && action == GLFW_PRESS){
+    //     glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
+    //}
     // change background color
-    if (key == GLFW_KEY_M && action == GLFW_PRESS) {
-        backgroundColor = getRandomColor();}
+    // if (key == GLFW_KEY_L && action == GLFW_PRESS) {
+    //     backgroundColor = getRandomColor();}
+
 
 }
 

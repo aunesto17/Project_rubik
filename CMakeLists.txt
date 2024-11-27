@@ -14,6 +14,7 @@ set(CMAKE_BUILD_TYPE Release )
 link_libraries(glfw)
 
 include_directories("${GLFW_SOURCE_DIR}/deps")
+include_directories("${CMAKE_SOURCE_DIR}")  # Add this to include the root directory
 
 if (MATH_LIBRARY)
 	message(${MATH_LIBRARY})
@@ -41,8 +42,8 @@ set(TINYCTHREAD "${GLFW_SOURCE_DIR}/deps/tinycthread.h"
 # OpenGL
 find_package(OpenGL REQUIRED)
 
-file(GLOB SOURCES "*.cpp" ${DEPENDENCY_DIR}/include/glad/glad/glad.c )
-file(GLOB HEADERS "*.h" )
+file(GLOB SOURCES "*.cpp" "solver/*.cpp" ${DEPENDENCY_DIR}/include/glad/glad/glad.c )
+file(GLOB HEADERS "*.h" "solver/*.h" )
 file(GLOB SHADERS "*.vert" "*.frag" "*.vs" "*.fs" )
 
 add_executable(
