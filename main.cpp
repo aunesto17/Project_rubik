@@ -47,9 +47,7 @@ main.cpp - entry point for application
 #include "rubik.h"
 //#include "transform.h"
 #include "helper.h"
-#include "camera.h"	
-#include "solver/solve.h"
-#include "solver/random.h"
+
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height); //dimensionar la pantalla
@@ -469,6 +467,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         // render
         // ------
+
 		// color del background
 		glClearColor(backgroundColor.x, backgroundColor.y, backgroundColor.z, 1.0f);
 
@@ -492,32 +491,6 @@ int main()
         float aspectRatio = (float)width / (float)height;
     
         camera.getPerspectiveMatrix(aspectRatio, projMatrix);
-        // // Set up camera
-        // float horizontalRadius = camera.distance * cos(toRadians(camera.elevation));
-        // float eye[3] = {
-        //     horizontalRadius * sin(toRadians(camera.rotationAngle)),
-        //     camera.distance * sin(toRadians(camera.elevation)),
-        //     horizontalRadius * cos(toRadians(camera.rotationAngle))
-        // };
-
-        // float center[3] = {0.0f, 0.0f, 0.0f};  // Looking at origin
-        // float up[3] = {0.0f, 1.0f, 0.0f};      // World up vector
-        // float viewMatrix[16];
-        
-        // // Calculate view matrix
-        // lookAt(eye, center, up, viewMatrix);
-        
-        // // Calculate orthographic projection matrix
-        // float aspect = SCR_WIDTH / SCR_HEIGHT;
-        // float size = 4.0f;  // Adjust this to control zoom level
-        // float projMatrix[16];
-        
-        // // Set up orthographic projection
-        // ortho(-size * aspect, size * aspect,    // left, right
-        //       -size, size,                      // bottom, top
-        //       0.1f, 100.0f,                     // near, far
-        //       projMatrix);
-
         
         glUseProgram(shaderProgram);
 
@@ -624,7 +597,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     if (glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS){
         // empty current moves
         movreg.clear();
-        movreg = cuboRubik.scrambleCube(60);
+        movreg = cuboRubik.scrambleCube(30);
     }
         
     // solve cube

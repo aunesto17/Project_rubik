@@ -16,6 +16,9 @@
 #include <queue>
 #include "vertex.h"
 #include <deque>
+#include "camera.h"	
+#include "solver/solve.h"
+#include "solver/random.h"
 
 
 // Matrix locations

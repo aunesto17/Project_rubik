@@ -7,7 +7,8 @@ private:
     enum class CameraAnimState {
         NONE,
         ZOOM_OUT,
-        ROTATING
+        ROTATING,
+        ZOOM_IN
     };
     // Camera attributes
     float distance = 10.0f;  // Distance from target

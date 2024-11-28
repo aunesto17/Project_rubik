@@ -127,7 +127,7 @@ private:
         
         CustomAnimationState() :
             isPlaying(false),
-            totalDuration(60.0f),
+            totalDuration(30.0f),
             currentTime(0.0f),
             cubeDelay(2.0f) {}
             
@@ -189,13 +189,61 @@ private:
         
         for (const auto& anim : customAnim.cubeAnimations) {
             if (anim.trailPoints.size() < 2) continue;
-            std::cout << "trail size: " << anim.trailPoints.size() << std::endl;
+            //std::cout << "trail size: " << anim.trailPoints.size() << std::endl;
             glBindVertexArray(trailBuffers[anim.cubeName].VAO);
             glDrawArrays(GL_LINE_STRIP, 0, anim.trailPoints.size());
         }
         
         glLineWidth(previousLineWidth);
     }
+
+    struct Move {
+        char face;
+        float angle;
+        bool isSlice;
+        
+        Move(char f, float a, bool slice = false) : face(f), angle(a), isSlice(slice) {}
+    };
+
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * for newCube animations
+     */
+
+    struct GrowingCubeAnimation {
+        bool isActive;
+        float scale;
+        float targetScale;
+        glm::vec3 position;
+        float growthStartTime;
+        float growthDuration;
+        bool startedScrambling;
+        bool finishedScrambling;
+        bool startedSolving;
+        bool finishedSolving;
+        float scrambleStartScale;  // Scale at which to start scrambling
+        float solveStartScale;     // Scale at which to start solving
+        std::vector<std::string> scrambleSequence;
+        std::vector<std::string> solveSequence;
+        
+        GrowingCubeAnimation() :
+            isActive(false),
+            scale(0.1f),  // Start at 10% of original size
+            targetScale(1.0f),
+            position(glm::vec3(0.0f)),
+            growthStartTime(0.0f),
+            growthDuration(45.0f),
+            startedScrambling(false),
+            finishedScrambling(false),
+            startedSolving(false),
+            finishedSolving(false),
+            scrambleStartScale(0.3f),  // Start scrambling at 60% size
+            solveStartScale(0.7f)  {}   // Start solving at 80% size {}
+    };
+
+    GrowingCubeAnimation growingCube;
+    std::unique_ptr<CuboRubik> secondaryCube;
 
     // ---------------------------------------------------------------------------------------------
 
@@ -988,14 +1036,6 @@ private:
     std::vector<char> POSSIBLE_MOVES = {'U', 'L', 'F', 'R', 'B', 'D'};
     std::vector<char> POSSIBLE_SLICES = {'V', 'H', 'S'};
 
-    struct Move {
-        char face;
-        float angle;
-        bool isSlice;
-        
-        Move(char f, float a, bool slice = false) : face(f), angle(a), isSlice(slice) {}
-    };
-
     std::queue<Move> moveQueue;
     bool isExecutingSequence = false;
 
@@ -1286,6 +1326,22 @@ public:
                 }
             }
         }
+
+        if (growingCube.isActive && secondaryCube) {
+            glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), 
+                glm::vec3(growingCube.scale));
+            
+            // Update shader uniforms for scaling
+            int modelLoc = glGetUniformLocation(shaderProgram, "model");
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(scaleMatrix));
+            
+            secondaryCube->draw(shaderProgram);
+            
+            // Reset model matrix
+            glm::mat4 identityMatrix(1.0f);
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(identityMatrix));
+        }
+            
         if (customAnim.isPlaying) {
             drawTrails(shaderProgram);
         }
@@ -1342,8 +1398,16 @@ public:
         initializeTrailBuffers();
 
         customAnim.reset();
+
+        // Initialize growing cube
+        growingCube = GrowingCubeAnimation();
+        growingCube.isActive = true;
         
-        float delay = 0.0f;
+        // Create secondary cube
+        secondaryCube = std::make_unique<CuboRubik>(lastFrameTime, *camera);
+        secondaryCube->init();
+        
+        float delay = 1.0f;
         for (const auto& cube : cubeMap) {
             CubeAnimation anim;
             anim.cubeName = cube.first;
@@ -1372,7 +1436,26 @@ public:
             
             anim.isActive = false;
             customAnim.cubeAnimations.push_back(anim);
+
+            // Start growing cube animation when last cube starts moving
+            if (delay >= (customAnim.cubeAnimations.size() - 1) * customAnim.cubeDelay) {
+                growingCube.growthStartTime = delay;
+            }
         }
+        //std::cout << "delay: "<< delay << std::endl;
+        //growingCube.growthDuration = delay;
+
+        // Generate scramble sequence for growing cube
+        std::vector<Move> scrmblSeq = generateScrambleSequence(15);
+        // store scrmblSeq in growingCube
+        for(auto move : scrmblSeq){
+            std::string str = std::string(1, move.face);
+            growingCube.scrambleSequence.push_back(str);
+        }
+        // Store reverse of scramble for solve sequence
+        //growingCube.solveSequence = get_solution(to_cube_not(growingCube.scrambleSequence));
+        growingCube.solveSequence.clear();
+
         customAnim.isPlaying = true;
     }
 
@@ -1383,6 +1466,55 @@ public:
         customAnim.currentTime += deltaTime;
         
         bool allComplete = true;
+
+        // Update growing cube animation
+        if (growingCube.isActive) {
+            float growthTime = customAnim.currentTime - growingCube.growthStartTime;
+            //std::cout << "growthTime: "<< growthTime << std::endl;
+            
+            if (growthTime >= 0.0f) {
+                // Calculate scale
+                float t = std::min(growthTime / growingCube.growthDuration, 1.0f);
+                growingCube.scale = glm::mix(0.1f, 1.0f, t);
+                //td::cout << "GCscale: "<< growingCube.scale << std::endl;
+                
+                // Start scrambling when cube reaches scrambleStartScale
+                if (!growingCube.startedScrambling && growingCube.scale >= growingCube.scrambleStartScale) {
+                    //secondaryCube->emptyMoveQueue();  // Clear any pending moves
+                    secondaryCube->moveFromList(growingCube.scrambleSequence);
+                    growingCube.startedScrambling = true;
+                }
+                
+                // Check if scrambling is complete
+                if (growingCube.startedScrambling && !secondaryCube->isExecutingSequence && !growingCube.finishedScrambling) {
+                    growingCube.finishedScrambling = true;
+                    // Generate solve sequence only after scramble is complete
+                    string scrambledState = to_cube_not(growingCube.scrambleSequence);
+                    growingCube.solveSequence = get_solution(scrambledState);
+                    for(int i=0;i<growingCube.solveSequence.size();++i){
+                        std::cout<<growingCube.solveSequence[i]<<" ";
+                    }
+                    std::cout << std::endl;
+                }
+                
+                // Start solving when cube reaches solveStartScale and scramble is complete
+                if (!growingCube.startedSolving && growingCube.finishedScrambling && 
+                    growingCube.scale >= growingCube.solveStartScale) {
+                    secondaryCube->emptyMoveQueue();  // Clear any pending moves
+                    secondaryCube->moveFromList(growingCube.solveSequence);
+                    growingCube.startedSolving = true;
+                }
+
+                if (growingCube.startedSolving && !secondaryCube->isExecutingSequence && !growingCube.finishedSolving) {
+                    growingCube.finishedSolving = true;
+                }
+                
+                // Update secondary cube
+                secondaryCube->updateAnimation(currentTime);
+                allComplete = (growingCube.scale == 1.0f && growingCube.finishedSolving) ? true : false;
+            }
+        }
+
         // for each cube animation (26 cubes)
         for (auto& anim : customAnim.cubeAnimations) {
             // check if it's cubes turn to animate
@@ -1481,10 +1613,24 @@ public:
         
         if (allComplete) {
             //resetCubePositions();
+            //resetRubik();
+            if (secondaryCube) {
+                // Copy all relevant state from secondary cube to this
+                this->cubeMap = std::move(secondaryCube->cubeMap);
+                this->faceMap = secondaryCube->faceMap;
+                this->sliceMap = secondaryCube->sliceMap;
+                this->cubeBuffers = std::move(secondaryCube->cubeBuffers);
+                
+                // Clear the secondary cube
+                secondaryCube.reset();
+            }
+            
             customAnim.reset();
-            resetRubik();
+            growingCube.isActive = false;  // Add this line here
+            growingCube = GrowingCubeAnimation();
             return false;
         }
+
         lastFrameTime = currentTime;
         return true;
     }
@@ -1579,10 +1725,12 @@ public:
         std::vector<Move> scrambleSequence = generateScrambleSequence(numMoves);
 
         isExecutingSequence = true;
+        emptyMoveQueue();
         
         std::cout << "Executing scramble sequence:" << scrambleSequence.size() <<std::endl;
         for (const Move& move : scrambleSequence) {
             std::cout << move.face << "(" << move.angle << ") ";
+        
             // if (move.isSlice) {
             //     rotateSlice(move.face, move.angle);
             // } else {
@@ -1700,8 +1848,14 @@ public:
         std::string mov = "";
 
         emptyMoveQueue();
-        std::cout << "queue size: "<< moveQueue.size() << std::endl;
+        //std::cout << "queue size: "<< moveQueue.size() << std::endl;
         isExecutingSequence = true;
+        std::cout << "Executing from list:" << str.size() <<std::endl;
+        // print the moves
+        for(int i=0;i<str.size();++i){
+            std::cout<<str[i]<<" ";
+        }
+        std::cout << std::endl;
 
         while(!(str.empty())){
             currentAnimation.animationSpeed = 180.0f;
