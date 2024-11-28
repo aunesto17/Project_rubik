@@ -23,6 +23,48 @@ public:
         return res;
     }
 
+    // sum operator
+    vec3 operator+(vec3 & v)
+    {
+        return vec3(x + v.x, y + v.y, z + v.z);
+    }
+
+    // subtraction operator
+    vec3 operator-(vec3 & v)
+    {
+        return vec3(x - v.x, y - v.y, z - v.z);
+    }
+
+    // multiplication operator
+    vec3 operator*(float num)
+    {
+        return vec3(x*num, y*num, z*num);
+    }
+
+    // plus equal operator
+    vec3 operator+=(vec3 & v)
+    {
+        x += v.x;
+        y += v.y;
+        z += v.z;
+        return *this;
+    }
+
+    // division operator
+    vec3 operator/(float num)
+    {
+        return vec3(x/num, y/num, z/num);
+    }
+
+    // equal operator
+    // vec3 operator=(vec3 & v)
+    // {
+    //     x = v.x;
+    //     y = v.y;
+    //     z = v.z;
+    //     return *this;
+    // }
+
     float getX() const { return x; }
     float getY() const { return y; }
     float getZ() const { return z; }

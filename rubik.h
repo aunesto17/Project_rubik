@@ -5,6 +5,7 @@
 
 #include "figura.h"
 #include "helper.h"
+#include "camera.h"
 
 #include <iostream>
 #include <cstdint>
@@ -42,7 +43,11 @@ private:
 
     map<string, CubeBuffers> cubeBuffers;
 
-    // animation variables
+    Camera * camera;
+
+    /**
+     * Animation state for rotating a face or slice of the cube.
+     */
     struct AnimationState {
         char face;
         float targetAngle;
@@ -66,6 +71,7 @@ private:
             face = ' ';
             targetAngle = 0.0f;
             currentAngle = 0.0f;
+            animationSpeed = 360.0f;
             isSlice = false;
             isAnimating = false;
             isClockwise = false;
@@ -76,6 +82,122 @@ private:
     AnimationState currentAnimation;
     float lastFrameTime;
     const float EPSILON = 0.0001f;
+
+    /**
+     * Animation states and functions for the final animation sequence.
+     */
+    struct CubeAnimation {
+        string cubeName;
+        glm::vec3 startPos;
+        glm::vec3 endPos;
+        glm::vec3 currentPos;
+        glm::vec3 rotationAxis;
+        float rotationAngle;
+        float currentAngle;
+        float delay;
+        float progress;
+        bool isActive;
+        int patternType;  // 0: linear, 1: sine wave, 2: circular, 3: spiral
+        std::vector<glm::vec3> trailPoints;
+        static const size_t MAX_TRAIL_POINTS = 200;
+        
+        CubeAnimation() : 
+            startPos(0.0f), 
+            endPos(0.0f), 
+            currentPos(0.0f),
+            rotationAxis(0.0f, 1.0f, 0.0f),
+            rotationAngle(0.0f),
+            currentAngle(0.0f),
+            delay(0.0f),
+            progress(0.0f),
+            isActive(false),
+            patternType(0) {}
+        
+        size_t getMaxTrailPoints() const {
+            return MAX_TRAIL_POINTS;
+        }
+    };
+
+    struct CustomAnimationState {
+        bool isPlaying;
+        float totalDuration;
+        float currentTime;
+        float cubeDelay;
+        std::vector<CubeAnimation> cubeAnimations;
+        
+        CustomAnimationState() :
+            isPlaying(false),
+            totalDuration(60.0f),
+            currentTime(0.0f),
+            cubeDelay(2.0f) {}
+            
+        void reset() {
+            isPlaying = false;
+            currentTime = 0.0f;
+            cubeAnimations.clear();
+        }
+    };
+
+    CustomAnimationState customAnim;
+
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * for cube trail animations
+     */
+
+    struct TrailBuffers {
+        GLuint VAO;
+        GLuint VBO;
+    };
+
+    std::map<std::string, TrailBuffers> trailBuffers;
+    size_t MTP = 200;
+
+    void initializeTrailBuffers() {
+        for (const auto& cube : cubeMap) {
+            TrailBuffers buffers;
+            glGenVertexArrays(1, &buffers.VAO);
+            glGenBuffers(1, &buffers.VBO);
+            
+            glBindVertexArray(buffers.VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, buffers.VBO);
+            
+            // Allocate buffer for maximum trail size
+            glBufferData(GL_ARRAY_BUFFER, MTP * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
+            
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
+            
+            trailBuffers[cube.first] = buffers;
+        }
+    }
+
+    void updateTrailBuffer(const std::string& cubeName, const std::vector<glm::vec3>& points) {
+        if (points.empty()) return;
+        
+        auto& buffer = trailBuffers[cubeName];
+        glBindBuffer(GL_ARRAY_BUFFER, buffer.VBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, points.size() * sizeof(glm::vec3), points.data());
+    }
+
+    void drawTrails(unsigned int shaderProgram) {
+        // Save current line width
+        GLfloat previousLineWidth;
+        glGetFloatv(GL_LINE_WIDTH, &previousLineWidth);
+        glLineWidth(2.0f);
+        
+        for (const auto& anim : customAnim.cubeAnimations) {
+            if (anim.trailPoints.size() < 2) continue;
+            std::cout << "trail size: " << anim.trailPoints.size() << std::endl;
+            glBindVertexArray(trailBuffers[anim.cubeName].VAO);
+            glDrawArrays(GL_LINE_STRIP, 0, anim.trailPoints.size());
+        }
+        
+        glLineWidth(previousLineWidth);
+    }
+
+    // ---------------------------------------------------------------------------------------------
 
     void setupBuffers() {
         // Texture coordinates for each face
@@ -137,12 +259,12 @@ private:
             }
 
             // if first cube then print vertexData
-            if(cube.first == "LUF"){
-                for (size_t i = 0; i < vertexData.size(); i++) {
-                    std::cout << vertexData[i] << " ";
-                    if((i+1) % 8 == 0) std::cout << std::endl;
-                }
-            }
+            // if(cube.first == "LUF"){
+            //     for (size_t i = 0; i < vertexData.size(); i++) {
+            //         std::cout << vertexData[i] << " ";
+            //         if((i+1) % 8 == 0) std::cout << std::endl;
+            //     }
+            // }
             
             // Generate and bind VAO
             glGenVertexArrays(1, &buffers.VAO);
@@ -174,6 +296,8 @@ private:
             cubeBuffers[cube.first] = buffers;
         }
     }
+
+    // ---------------------------------------------------------------------------------------------
 
     // Helper method to rotate vertices around an axis
     void rotateVertices(std::vector<vec3>& vertices, const glm::vec3& axis, float angle) {
@@ -825,19 +949,6 @@ private:
         currentAnimation.isAnimating = true;
         currentAnimation.isClockwise = (angle < 0);
 
-        //vector<string> affectedCubes;
-        
-        // Get affected cubes based on face
-        // if (faceMap.find(string(1, face)) != faceMap.end()) {
-        //     const auto& faceCubes = faceMap[string(1, face)];
-        //     affectedCubes.insert(affectedCubes.end(), faceCubes.begin(), faceCubes.end());
-        // }
-
-        // print affectedCubes
-        // for (const auto& cube : affectedCubes) {
-        //     std::cout << cube << " ";
-        // }
-
         currentAnimation.affectedCubes.clear();
         if (faceMap.find(std::string(1, face)) != faceMap.end()) {
             const auto& faceCubes = faceMap[std::string(1, face)];
@@ -847,51 +958,13 @@ private:
                 faceCubes.end()
             );
         }
-
-        //bool clockwise = (angle < 0);
-        //updateCubePositions(currentAnimation.affectedCubes, face, angle);
-        //updateFaceMapAfterRotation(face, clockwise);
-        
-        // Debug print to verify face map update
-        // std::cout << "Face " << face << " rotated " << (clockwise ? "clockwise" : "counter-clockwise") << std::endl;
-        // printFaceMap(face);
-        // std::cout << "-------------------" << std::endl;
-        // printFaceMap('U');
-        // std::cout << "-------------------" << std::endl;
-        // printFaceMap('L');
-        // std::cout << "-------------------" << std::endl;
-        // printFaceMap('F');
-        // std::cout << "-------------------" << std::endl;
-        // printFaceMap('R');
-        // std::cout << "-------------------" << std::endl;
-        // printFaceMap('B');
-        // std::cout << "-------------------" << std::endl;
-        // printFaceMap('D');
-        // std::cout << "-------------------" << std::endl;
-        
-        // printSliceMap('V');
-        // std::cout << "-------------------" << std::endl;
-        // printSliceMap('H');
-        // std::cout << "-------------------" << std::endl;
-        // printSliceMap('S');
-        // std::cout << "-------------------" << std::endl;
     }
 
     void rotateSlice(char slice, float angle) {
         if (currentAnimation.isAnimating) {
             return; // Don't start new animation while one is in progress
         }
-        
-        //vector<string> affectedCubes;
-        
-        // Get affected cubes based on slice
-        // if (sliceMap.find(string(1, slice)) != sliceMap.end()) {
-        //     const auto& sliceCubes = sliceMap[string(1, slice)];
-        //     affectedCubes.insert(affectedCubes.end(), sliceCubes.begin(), sliceCubes.end());
-        // }
-
         angle = normalizeAngle(angle);
-
         // Setup animation
         currentAnimation.face = slice;
         currentAnimation.targetAngle = angle;
@@ -909,16 +982,6 @@ private:
                 sliceCubes.end()
             );
         }
-        
-        //bool clockwise = (angle < 0);
-        //updateCubePositions(currentAnimation.affectedCubes, slice, angle);
-        //updateSliceMapAfterRotation(slice, clockwise);
-
-        std::cout << "slice " << slice << " angle: " << angle << std::endl;
-        // printSliceMap(slice);
-        // std::cout << "-------------------" << std::endl;
-        // printFaceMap('F');
-        // std::cout << "-------------------" << std::endl;
     }
 
     // solver methods
@@ -933,6 +996,9 @@ private:
         Move(char f, float a, bool slice = false) : face(f), angle(a), isSlice(slice) {}
     };
 
+    std::queue<Move> moveQueue;
+    bool isExecutingSequence = false;
+
     std::vector<Move> generateScrambleSequence(int numMoves) {
         std::vector<Move> sequence;
         std::random_device rd;
@@ -940,16 +1006,12 @@ private:
         
         // Distribution for moves and angles
         std::uniform_int_distribution<> moveDist(0, POSSIBLE_MOVES.size() - 1);
-        //std::uniform_int_distribution<> sliceDist(0, POSSIBLE_SLICES.size() - 1);
         std::uniform_int_distribution<> angleDist(0, 1);  // 0: 90°, 1: -90°, 2: 180°
-        //std::uniform_int_distribution<> moveTypeDist(0, 4); // 20% chance for slice moves
         
         char lastFace = ' ';
         
         for (int i = 0; i < numMoves; i++) {
-            char face;
-            //bool isSlice = (moveTypeDist(gen) == 0); // 20% chance for slice moves
-            
+            char face;            
             // Avoid same face moves consecutively
             do {
                 face = POSSIBLE_MOVES[moveDist(gen)];
@@ -1002,6 +1064,31 @@ private:
         glBufferSubData(GL_ARRAY_BUFFER, 0, vertexData.size() * sizeof(float), &vertexData[0]);
     }
 
+    void executeNextMove() {
+        if (moveQueue.empty() || currentAnimation.isAnimating) {
+            return;
+        }
+
+        Move move = moveQueue.front();
+        moveQueue.pop();
+        currentAnimation.animationSpeed = 180.0f;
+
+        if (move.isSlice) {
+            rotateSlice(move.face, move.angle);
+        } else {
+            rotateFace(move.face, move.angle);
+        }
+    }
+
+    void queueRotation(char face, float angle, bool isSlice = false) {
+        moveQueue.push(Move(face, angle, isSlice));
+        
+        if (!currentAnimation.isAnimating && !moveQueue.empty()) {
+            executeNextMove();
+        }
+    }
+
+
     void finishAnimation() {
         // Snap all affected cubes to grid
         // for (const std::string& cubeName : currentAnimation.affectedCubes) {
@@ -1022,6 +1109,12 @@ private:
         
         // Reset animation state
         currentAnimation.reset();
+        // Check if there are more moves in the queue
+        if (!moveQueue.empty()) {
+            executeNextMove();
+        } else {
+            isExecutingSequence = false;
+        }
     }
     // Helper method to update positions during animation
     void updateFacePositions(char face, float angleChange) {
@@ -1063,9 +1156,10 @@ private:
     }
 
 public:
-    CuboRubik(float lastFrameTime) : lastFrameTime(lastFrameTime) {
+    CuboRubik(float lastFrameTime, Camera & cam) : lastFrameTime(lastFrameTime) {
         
         std::cout << "Rubik's Cube Constructor" << std::endl;
+        camera = &cam;
         //initializeCubes();
         //setupBuffers();
     }
@@ -1074,6 +1168,30 @@ public:
         // Initialize all cubes with their positions
         initializeCubes();
         setupBuffers();
+    }
+
+    void resetRubik() {
+        // empty cubeMap
+        cubeMap.clear();
+        // empty faceMap
+        faceMap.clear();
+        // empty sliceMap
+        sliceMap.clear();
+        // empty cubeBuffers
+        cubeBuffers.clear();
+        // empty currentAnimation
+        currentAnimation.reset();
+        // empty moveQueue
+        while (!moveQueue.empty()) {
+            moveQueue.pop();
+        }
+        // set isExecutingSequence to false
+        isExecutingSequence = false;
+        // initialize cubes
+        initializeCubes();
+        // setup buffers
+        setupBuffers();
+        std::cout << "Rubik's Cube Reset" << std::endl;
     }
 
     void initializeCubes() {
@@ -1149,18 +1267,6 @@ public:
             std::cout << "Warning: Could not find faceIndex uniform location" << std::endl;
         }
 
-        // for (const auto& cube : cubeBuffers) {
-        //     glBindVertexArray(cube.second.VAO);
-            
-        //     //glDrawArrays(GL_TRIANGLES, 0, 36);  // 6 vertices per face * 6 faces
-
-        //     // Draw each face with appropriate texture
-        //     for(int face = 0; face < 6; face++) {
-        //         glUniform1i(faceIndexLoc, face);
-        //         glDrawArrays(GL_TRIANGLES, 0, 36);
-        //     }
-        // }
-
         for (const auto& cube : cubeBuffers) {
             glBindVertexArray(cube.second.VAO);
         
@@ -1180,39 +1286,9 @@ public:
                 }
             }
         }
-
-        // draw only first cube
-        // glBindVertexArray(cubeBuffers["LDB"].VAO);
-        // for (int face = 0; face < 6; face++) {
-        //         // Set which face we're drawing (this tells the shader which texture to use)
-        //         glUniform1i(faceIndexLoc, face);
-                
-        //         // Draw just this face (6 vertices)
-        //         glDrawArrays(GL_TRIANGLES, face * 6, 6);
-                
-        //         // Check for errors
-        //         GLenum err = glGetError();
-        //         if (err != GL_NO_ERROR) {
-        //             std::cout << "OpenGL error in draw: " << err 
-        //                     << " (face " << face << ")" << std::endl;
-        //         }
-        //     }
-
-        // glBindVertexArray(cubeBuffers["LDF"].VAO);
-        // for (int face = 0; face < 6; face++) {
-        //         // Set which face we're drawing (this tells the shader which texture to use)
-        //         glUniform1i(faceIndexLoc, face);
-                
-        //         // Draw just this face (6 vertices)
-        //         glDrawArrays(GL_TRIANGLES, face * 6, 6);
-                
-        //         // Check for errors
-        //         GLenum err = glGetError();
-        //         if (err != GL_NO_ERROR) {
-        //             std::cout << "OpenGL error in draw: " << err 
-        //                     << " (face " << face << ")" << std::endl;
-        //         }
-        // }
+        if (customAnim.isPlaying) {
+            drawTrails(shaderProgram);
+        }
     }
 
     // Update animation state - call this every frame
@@ -1226,19 +1302,18 @@ public:
 
         float deltaTime = currentTime - lastFrameTime;
         deltaTime = std::min(deltaTime, 0.016f);
-        std::cout << "deltaTime: " << deltaTime << std::endl;
+        //std::cout << "deltaTime: " << deltaTime << std::endl;
         //lastFrameTime = currentTime;
-        
 
         // Calculate new angle
         float angleChange = sign * currentAnimation.animationSpeed * deltaTime;
         //float angleChange = 5.0f;
-        std::cout << "angleChange: " << angleChange << std::endl;
-        std::cout << "current angle: " << currentAnimation.currentAngle << std::endl;
-        std::cout << "target angle: " << currentAnimation.targetAngle << std::endl;
+        //std::cout << "angleChange: " << angleChange << std::endl;
+        //std::cout << "current angle: " << currentAnimation.currentAngle << std::endl;
+        //std::cout << "target angle: " << currentAnimation.targetAngle << std::endl;
         float remainingAngle = currentAnimation.targetAngle - currentAnimation.currentAngle;
 
-        std::cout << "Angle change: "<< angleChange <<"\t Remaining angle: " << remainingAngle << std::endl;	
+        //std::cout << "Angle change: "<< angleChange <<"\t Remaining angle: " << remainingAngle << std::endl;	
         
         if (std::abs(remainingAngle) <= abs(angleChange) + EPSILON) {
             // Animation complete
@@ -1258,6 +1333,168 @@ public:
 
         currentAnimation.currentAngle += angleChange;
         lastFrameTime = currentTime;
+    }
+
+    void setupExplosionAnimation() {
+        if (customAnim.isPlaying) return;
+        
+        camera->startCameraAnimation(customAnim.totalDuration + customAnim.cubeDelay*25);
+        initializeTrailBuffers();
+
+        customAnim.reset();
+        
+        float delay = 0.0f;
+        for (const auto& cube : cubeMap) {
+            CubeAnimation anim;
+            anim.cubeName = cube.first;
+            
+            // Calculate center position of cube
+            glm::vec3 center = getCubeCenter(cube.second->vertices);
+            anim.startPos = center;
+            std::cout << "cube: " << cube.first << " center: " << center.x << " " << center.y << " " << center.z << std::endl;
+            
+            // Calculate direction for explosion
+            glm::vec3 direction = glm::normalize(center);
+            anim.endPos = center + direction * 30.0f; // Move 5 units outward
+            
+            // Random rotation axis
+            anim.rotationAxis = glm::normalize(glm::vec3(
+                ((float)rand()/RAND_MAX - 0.5f) * 2.0f,
+                ((float)rand()/RAND_MAX - 0.5f) * 2.0f,
+                ((float)rand()/RAND_MAX - 0.5f) * 2.0f
+            ));
+            anim.rotationAngle = 360.0f;
+            
+            //anim.patternType = rand() % 4;
+            anim.patternType = 1;
+            anim.delay = delay;
+            delay += customAnim.cubeDelay;
+            
+            anim.isActive = false;
+            customAnim.cubeAnimations.push_back(anim);
+        }
+        customAnim.isPlaying = true;
+    }
+
+    bool updateCustomAnimation(float currentTime) {
+        if (!customAnim.isPlaying) return true;
+        
+        float deltaTime = currentTime - lastFrameTime;
+        customAnim.currentTime += deltaTime;
+        
+        bool allComplete = true;
+        // for each cube animation (26 cubes)
+        for (auto& anim : customAnim.cubeAnimations) {
+            // check if it's cubes turn to animate
+            if (customAnim.currentTime < anim.delay) {
+                allComplete = false;
+                continue;
+            }
+            
+            float localTime = customAnim.currentTime - anim.delay;
+            if (localTime > customAnim.totalDuration) continue;
+            
+            allComplete = false;
+            // progress = 0.0 -> 1.0
+            float t = localTime / customAnim.totalDuration;
+            anim.progress = t;
+            
+            // Calculate position based on pattern
+            glm::vec3 basePos = glm::mix(anim.startPos, anim.endPos, t);
+
+            if (anim.trailPoints.size() >= anim.MAX_TRAIL_POINTS) {
+                anim.trailPoints.erase(anim.trailPoints.begin());
+            }
+            
+            
+            switch (anim.patternType) {
+                case 1: // Sine wave
+                    //basePos.y += sin(t * glm::pi<float>() * 2.0f) * 0.5f;
+                    // x -> t
+                    // amplitude -> 5.0f
+                    basePos.y += sin(t * glm::pi<float>() * 10.0f) * 2.0f;
+                    break;
+                case 2: // Circular
+                    {
+                        float angle = t * glm::pi<float>() * 4.0f;
+                        glm::vec3 right = glm::cross(
+                            glm::normalize(anim.endPos - anim.startPos), 
+                            glm::vec3(0.0f, 1.0f, 0.0f)
+                        );
+                        // basePos += right * (sin(angle) * 0.5f);
+                        // basePos.y += cos(angle) * 0.5f;
+                        basePos += right * (sin(angle) * 2.0f);
+                        basePos.y += cos(angle) * 2.0f;
+                    }
+                    break;
+                case 3: // Spiral
+                    {
+                        float angle = t * glm::pi<float>() * 6.0f;
+                        //float radius = (1.0f - t) * 0.5f;
+                        float radius = (1.0f - t) * 2.0f;
+                        glm::vec3 right = glm::cross(
+                            glm::normalize(anim.endPos - anim.startPos), 
+                            glm::vec3(0.0f, 1.0f, 0.0f)
+                        );
+                        basePos += right * (sin(angle) * radius);
+                        basePos.y += cos(angle) * radius;
+                    }
+                    break;
+            }
+
+            anim.trailPoints.push_back(basePos);
+            updateTrailBuffer(anim.cubeName, anim.trailPoints);
+            
+            // Update cube position and rotation
+            auto& cube = cubeMap[anim.cubeName];
+            glm::vec3 currentCenter = getCubeCenter(cube->vertices);
+            glm::vec3 offset = basePos - currentCenter;
+            
+            // Create rotation matrix
+            float rotationDelta = anim.rotationAngle * deltaTime;
+            glm::mat4 rotation = glm::rotate(
+                glm::mat4(1.0f),
+                glm::radians(rotationDelta),
+                anim.rotationAxis
+            );
+            
+            // Apply transformation to vertices
+            for (auto& vertex : cube->vertices) {
+                // Convert vec3 to glm::vec3 for transformation
+                glm::vec3 v(vertex.getX(), vertex.getY(), vertex.getZ());
+                
+                // Apply offset
+                v += offset;
+                
+                // Apply rotation around basePos
+                glm::vec3 relative = v - basePos;
+                glm::vec4 rotated = rotation * glm::vec4(relative, 1.0f);
+                v = basePos + glm::vec3(rotated);
+                
+                // Update vertex
+                vertex = vec3(v.x, v.y, v.z);
+            }
+            
+            // Update buffer
+            updateCubeBuffer(anim.cubeName);
+        }
+        
+        if (allComplete) {
+            //resetCubePositions();
+            customAnim.reset();
+            resetRubik();
+            return false;
+        }
+        lastFrameTime = currentTime;
+        return true;
+    }
+
+    void resetCubePositions() {
+        // Reset all cubes to their original positions
+        initializeCubes();
+        for (const auto& cube : cubeMap) {
+            updateCubeBuffer(cube.first);
+        }
     }
 
     void rotateU() {
@@ -1340,41 +1577,56 @@ public:
     std::vector<string> scrambleCube(int numMoves) {
         std::vector<std::string> sequenceString;
         std::vector<Move> scrambleSequence = generateScrambleSequence(numMoves);
+
+        isExecutingSequence = true;
         
         std::cout << "Executing scramble sequence:" << scrambleSequence.size() <<std::endl;
         for (const Move& move : scrambleSequence) {
-            std::cout << move.face << "(" << move.angle << "°) ";
+            std::cout << move.face << "(" << move.angle << ") ";
             // if (move.isSlice) {
             //     rotateSlice(move.face, move.angle);
             // } else {
             //     rotateFace(move.face, move.angle);
             // }
+            currentAnimation.animationSpeed = 720.0f;
             if(move.angle < 0)
             {
                 switch(move.face) {
                     case 'U':
-                        rotateU();
+                        queueRotation('U', -90.0f);
                         sequenceString.push_back("U");
+                        //rotateU();
+                        //sequenceString.push_back("U");
                         break;
                     case 'L':
-                        rotateL();
+                        queueRotation('L', -90.0f);
                         sequenceString.push_back("L");
+                        //rotateL();
+                        //sequenceString.push_back("L");
                         break;
                     case 'F':
-                        rotateF();
+                        queueRotation('F', -90.0f);
                         sequenceString.push_back("F");
+                        //rotateF();
+                        //sequenceString.push_back("F");
                         break;
                     case 'R':
-                        rotateR();
+                        queueRotation('R', -90.0f);
                         sequenceString.push_back("R");
+                        //rotateR();
+                        //sequenceString.push_back("R");
                         break;
                     case 'B':
-                        rotateB();
+                        queueRotation('B', -90.0f);
                         sequenceString.push_back("B");
+                        //rotateB();
+                        //sequenceString.push_back("B");
                         break;
                     case 'D':
-                        rotateD();
+                        queueRotation('D', -90.0f);
                         sequenceString.push_back("D");
+                        //rotateD();
+                        //sequenceString.push_back("D");
                         break;
                     case 'V':
                         rotateSV();
@@ -1390,28 +1642,40 @@ public:
             else{
                 switch(move.face) {
                     case 'U':
-                        rotateUPrime();
-                        sequenceString.push_back("U'");
+                        queueRotation('U', 90.0f);
+                        sequenceString.push_back("U'");	
+                        //rotateUPrime();
+                        //sequenceString.push_back("U'");
                         break;
                     case 'L':
-                        rotateLPrime();
+                        queueRotation('L', 90.0f);
                         sequenceString.push_back("L'");
+                        //rotateLPrime();
+                        //sequenceString.push_back("L'");
                         break;
                     case 'F':
-                        rotateFPrime();
+                        queueRotation('F', 90.0f);
                         sequenceString.push_back("F'");
+                        //rotateFPrime();
+                        //sequenceString.push_back("F'");
                         break;
                     case 'R':
-                        rotateRPrime();
+                        queueRotation('R', 90.0f);
                         sequenceString.push_back("R'");
+                        //rotateRPrime();
+                        //sequenceString.push_back("R'");
                         break;
                     case 'B':
-                        rotateBPrime();
+                        queueRotation('B', 90.0f);
                         sequenceString.push_back("B'");
+                        //rotateBPrime();
+                        //sequenceString.push_back("B'");
                         break;
                     case 'D':
-                        rotateDPrime();
+                        queueRotation('D', 90.0f);
                         sequenceString.push_back("D'");
+                        //rotateDPrime();
+                        //sequenceString.push_back("D'");
                         break;
                     case 'V':
                         rotateSV();
@@ -1426,93 +1690,128 @@ public:
             }
             
         }
+        //std::cout << "queue size: "<< moveQueue.size() << std::endl;
         std::cout << std::endl;
         return sequenceString;
     }
 
     void moveFromList(std::vector<std::string> str)
     {
-        std::string mov = "";	
+        std::string mov = "";
+
+        emptyMoveQueue();
+        std::cout << "queue size: "<< moveQueue.size() << std::endl;
+        isExecutingSequence = true;
+
         while(!(str.empty())){
+            currentAnimation.animationSpeed = 180.0f;
             mov = str[0];
             str.erase(str.begin());
             if(mov == "U")
             {
-                rotateU();
+                queueRotation('U', -90.0f);
             }
             else if(mov == "U'")
             {
-                rotateUPrime();
+                queueRotation('U', 90.0f); 
             }
             else if(mov == "U2")
             {
-                rotateU2();
+                //rotateU2();
+                queueRotation('U', -90.0f);
+                queueRotation('U', -90.0f);
             }
             else if(mov == "L")
             {
-                rotateL();
+                //rotateL();
+                queueRotation('L', -90.0f);
             }
             else if(mov == "L'")
             {
-                rotateLPrime();
+                //rotateLPrime();
+                queueRotation('L', 90.0f);
             }
             else if(mov == "L2")
             {
-                rotateL2();
+                //rotateL2();
+                queueRotation('L', -90.0f);
+                queueRotation('L', -90.0f);
             }
             else if(mov == "F")
             {
-                rotateF();
+                //rotateF();
+                queueRotation('F', -90.0f);
             }
             else if(mov == "F'")
             {
-                rotateFPrime();
+                //rotateFPrime();
+                queueRotation('F', 90.0f);
             }
             else if(mov == "F2")
             {
-                rotateF2();
+                //rotateF2();
+                queueRotation('F', -90.0f);
+                queueRotation('F', -90.0f);
             }
             else if(mov == "R")
             {
-                rotateR();
+                //rotateR();
+                queueRotation('R', -90.0f);
             }
             else if(mov == "R'")
             {
-                rotateRPrime();
+                //rotateRPrime();
+                queueRotation('R', 90.0f);
             }
             else if(mov == "R2")
             {
-                rotateR2();
+                //rotateR2();
+                queueRotation('R', -90.0f);
+                queueRotation('R', -90.0f);
             }
             else if(mov == "B")
             {
-                rotateB();
+                //rotateB();
+                queueRotation('B', -90.0f);
             }
             else if(mov == "B'")
             {
-                rotateBPrime();
+                //rotateBPrime();
+                queueRotation('B', 90.0f);
             }
             else if(mov == "B2")
             {
-                rotateB2();
+                //rotateB2();
+                queueRotation('B', -90.0f);
+                queueRotation('B', -90.0f);
             }
             else if(mov == "D")
             {
-                rotateD();
+                //rotateD();
+                queueRotation('D', -90.0f);
             }
             else if(mov == "D'")
             {
-                rotateDPrime();
+                //rotateDPrime();
+                queueRotation('D', 90.0f);
             }
             else if(mov == "D2")
             {
-                rotateD2();
+                //rotateD2();
+                queueRotation('D', -90.0f);
+                queueRotation('D', -90.0f);
             }
         }
     }
 
     void setLastFrameTime(float time) {
         lastFrameTime = time;
+    }
+
+    void emptyMoveQueue() {
+        while(!moveQueue.empty()) {
+            moveQueue.pop();
+        }
     }
 
 

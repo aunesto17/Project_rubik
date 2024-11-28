@@ -60,6 +60,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 static void key_callback(GLFWwindow*, int, int, int, int); //callback para las teclas
+unsigned int loadCubemap(vector<std::string> faces);
 
 struct colorVec {
     float x, y, z;
@@ -74,12 +75,16 @@ colorVec getRandomColor() {
 }
 
 // definimos las figuras
-CuboRubik cuboRubik(glfwGetTime());
 Camera camera;
+CuboRubik cuboRubik(glfwGetTime(), camera);
+
+float sbSize = camera.getMaxDistance() + 10.0f;
 
 float lastFrame = 0.0f;
 float deltaTime = 0.0f;
 float currentFrame = 0.0f;
+
+bool customAnimActive = 0;
 
 //cuboRubik.setLastFrameTime();
 
@@ -178,6 +183,28 @@ const char *fragmentShaderTexSource = "#version 330 core\n"
         "}\n"     
     "}\0";
 
+const char *vertexShaderSBSource = "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "out vec3 TexCoords;\n"
+    "uniform mat4 projection;\n"
+    "uniform mat4 view;\n"
+    "void main()\n"
+    "{\n"
+    //"   TexCoords = aPos;\n"
+    "   TexCoords = vec3(aPos.x, -aPos.y, aPos.z);\n"
+    "   vec4 pos = projection * view * vec4(aPos, 1.0);\n"
+    "   gl_Position = pos.xyww;\n"
+    "}\0";
+
+const char *fragmentShaderSBSource = "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "in vec3 TexCoords;\n"
+    "uniform samplerCube skybox;\n"
+    "void main()\n"
+    "{\n"
+    "   FragColor = texture(skybox, TexCoords);\n"
+    "}\0";
+
 int main()
 {
     // glfw: initialize and configure
@@ -214,6 +241,53 @@ int main()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // ---------------------------------------
+    // vertices skybox
+    // ---------------------------------------
+    float skyboxVertices[] = {
+        // positions          
+        -sbSize,  sbSize, -sbSize,
+        -sbSize, -sbSize, -sbSize,
+         sbSize, -sbSize, -sbSize,
+         sbSize, -sbSize, -sbSize,
+         sbSize,  sbSize, -sbSize,
+        -sbSize,  sbSize, -sbSize,
+
+        -sbSize, -sbSize,  sbSize,
+        -sbSize, -sbSize, -sbSize,
+        -sbSize,  sbSize, -sbSize,
+        -sbSize,  sbSize, -sbSize,
+        -sbSize,  sbSize,  sbSize,
+        -sbSize, -sbSize,  sbSize,
+
+         sbSize, -sbSize, -sbSize,
+         sbSize, -sbSize,  sbSize,
+         sbSize,  sbSize,  sbSize,
+         sbSize,  sbSize,  sbSize,
+         sbSize,  sbSize, -sbSize,
+         sbSize, -sbSize, -sbSize,
+
+        -sbSize, -sbSize,  sbSize,
+        -sbSize,  sbSize,  sbSize,
+         sbSize,  sbSize,  sbSize,
+         sbSize,  sbSize,  sbSize,
+         sbSize, -sbSize,  sbSize,
+        -sbSize, -sbSize,  sbSize,
+
+        -sbSize,  sbSize, -sbSize,
+         sbSize,  sbSize, -sbSize,
+         sbSize,  sbSize,  sbSize,
+         sbSize,  sbSize,  sbSize,
+        -sbSize,  sbSize,  sbSize,
+        -sbSize,  sbSize, -sbSize,
+
+        -sbSize, -sbSize, -sbSize,
+        -sbSize, -sbSize,  sbSize,
+         sbSize, -sbSize, -sbSize,
+         sbSize, -sbSize, -sbSize,
+        -sbSize, -sbSize,  sbSize,
+         sbSize, -sbSize,  sbSize
+    };
+    // ---------------------------------------
     // texturas
     // ---------------------------------------
     unsigned int textureU, textureC, textureS, textureP, textureUL;
@@ -248,6 +322,17 @@ int main()
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::VERTEX::0::COMPILATION_FAILED\n" << infoLog << std::endl;
     }
+
+    unsigned int vertexShaderSB = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShaderSB, 1, &vertexShaderSBSource, NULL);
+    glCompileShader(vertexShaderSB);
+    // check for shader compile errors
+    glGetShaderiv(vertexShaderSB, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        std::cout << "ERROR::SHADER::VERTEX::SB::COMPILATION_FAILED\n" << infoLog << std::endl;
+    }
 	
     // FRAGMENT SHADER   
     unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -259,6 +344,16 @@ int main()
     {
         glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+    }
+    unsigned int fragmentShaderSB = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShaderSB, 1, &fragmentShaderSBSource, NULL);
+    glCompileShader(fragmentShaderSB);
+    // check for shader compile errors
+    glGetShaderiv(fragmentShaderSB, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        std::cout << "ERROR::SHADER::FRAGMENT_SB::COMPILATION_FAILED\n" << infoLog << std::endl;
     }
 
     // LINK SHADERS and form a SHADER PROGRAM
@@ -272,9 +367,55 @@ int main()
         glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::PROGRAM::0::LINKING_FAILED\n" << infoLog << std::endl;
     }
+
+    unsigned int shaderProgramSB = glCreateProgram();
+    glAttachShader(shaderProgramSB, vertexShaderSB);
+    glAttachShader(shaderProgramSB, fragmentShaderSB);
+    glLinkProgram(shaderProgramSB);
+	// check for linking errors
+    glGetProgramiv(shaderProgramSB, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        std::cout << "ERROR::SHADER::PROGRAM::SB::LINKING_FAILED\n" << infoLog << std::endl;
+    }
     // delete used Shaders
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
+    glDeleteShader(vertexShaderSB);
+    glDeleteShader(fragmentShaderSB);
+
+    // skybox VAO
+    unsigned int skyboxVAO, skyboxVBO;
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    std::vector<std::string> faces
+    {
+        // "stars/right.jpg",
+        // "stars/left.jpg",
+        // "stars/top.jpg",
+        // "stars/bottom.jpg",
+        // "stars/front.jpg",
+        // "stars/back.jpg"
+        "waters/right.jpg",
+        "waters/left.jpg",
+        "waters/top.jpg",
+        "waters/bottom.jpg",
+        "waters/front.jpg",
+        "waters/back.jpg"
+        // "stars2/right.jpg",
+        // "stars2/left.jpg",
+        // "stars2/top.jpg",
+        // "stars2/bottom.jpg",
+        // "stars2/front.jpg",
+        // "stars2/back.jpg"
+    };
+    unsigned int cubemapTexture = loadCubemap(faces);
 
     //CuboRubik cuboRubik;
     cuboRubik.init();
@@ -311,7 +452,9 @@ int main()
     // cam variables
     float cameraSpeed = 0.05f;
     bool unaPrueba=true;
-    
+
+    glUseProgram(shaderProgramSB);
+    glUniform1i(glGetUniformLocation(shaderProgramSB, "skybox"), 0);
 
     // render loop
     // -----------
@@ -329,7 +472,13 @@ int main()
 		// color del background
 		glClearColor(backgroundColor.x, backgroundColor.y, backgroundColor.z, 1.0f);
 
-        cuboRubik.updateAnimation(currentFrame);
+        camera.updateCameraAnimation(deltaTime);
+
+        if(!customAnimActive)
+            cuboRubik.updateAnimation(currentFrame);
+        else{
+            customAnimActive = cuboRubik.updateCustomAnimation(currentFrame);
+        }
 
         viewLoc = glGetUniformLocation(shaderProgram, "view");
         projLoc = glGetUniformLocation(shaderProgram, "projection");
@@ -405,6 +554,29 @@ int main()
 
         cuboRubik.draw(shaderProgram);
 
+        // draw skybox as last
+        viewLocSB = glGetUniformLocation(shaderProgramSB, "view");
+        projLocSB = glGetUniformLocation(shaderProgramSB, "projection");
+
+        glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
+        glUseProgram(shaderProgramSB);
+        camera.getViewMatrix(viewMatrix);
+        //camera.getPerspectiveMatrix(aspectRatio, projMatrix);
+
+
+        //viewMatrix = glm::mat4(glm::mat3(camera.getViewMatrix())); // remove translation from the view matrix
+        //skyboxShader.setMat4("view", view);
+        //skyboxShader.setMat4("projection", projection);
+        glUniformMatrix4fv(viewLocSB, 1, GL_FALSE, viewMatrix);
+        glUniformMatrix4fv(projLocSB, 1, GL_FALSE, projMatrix);
+        // skybox cube
+        glBindVertexArray(skyboxVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+        glDepthFunc(GL_LESS); // set depth function back to default
+
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
@@ -467,7 +639,19 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         //exeanimation(solvedCube,window);
         cuboRubik.moveFromList(solvedCube);
     }
-        
+
+    // animation sequence
+    if (key == GLFW_KEY_C && action == GLFW_PRESS) {
+        customAnimActive = true;
+        cuboRubik.setupExplosionAnimation();
+        solvedCube.clear();
+    }
+
+    // reset cube
+    if (key == GLFW_KEY_K && action == GLFW_PRESS) {
+        cuboRubik.resetRubik();
+        movreg.clear();
+    }  
 
     // rotate cube faces
     if (key == GLFW_KEY_T && action == GLFW_PRESS)
@@ -524,20 +708,20 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
     
     // change display mode to lines only
-    // if(key == GLFW_KEY_I && action == GLFW_PRESS){
-    //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    // }
-    // // change display mode to fill only
-    // if(key == GLFW_KEY_O && action == GLFW_PRESS){
-    //     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    // }
-    // // change display mode to points only 
-    // if(key == GLFW_KEY_P && action == GLFW_PRESS){
-    //     glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
-    //}
+    if(key == GLFW_KEY_I && action == GLFW_PRESS){
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    // change display mode to fill only
+    if(key == GLFW_KEY_O && action == GLFW_PRESS){
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    // change display mode to points only 
+    if(key == GLFW_KEY_P && action == GLFW_PRESS){
+        glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
+    }
     // change background color
-    // if (key == GLFW_KEY_L && action == GLFW_PRESS) {
-    //     backgroundColor = getRandomColor();}
+    if (key == GLFW_KEY_L && action == GLFW_PRESS) {
+        backgroundColor = getRandomColor();}
 
 
 }
@@ -550,4 +734,34 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
+}
+
+unsigned int loadCubemap(vector<std::string> faces)
+{
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    int width, height, nrChannels;
+    for (unsigned int i = 0; i < faces.size(); i++)
+    {
+        unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
+        if (data)
+        {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
+        }
+        else
+        {
+            std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
+            stbi_image_free(data);
+        }
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
 }

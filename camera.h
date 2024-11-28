@@ -4,6 +4,11 @@
 
 class Camera {
 private:
+    enum class CameraAnimState {
+        NONE,
+        ZOOM_OUT,
+        ROTATING
+    };
     // Camera attributes
     float distance = 10.0f;  // Distance from target
     float pitch = 30.0f;     // Up/down rotation
@@ -17,9 +22,35 @@ private:
 
     // Minimum and maximum values
     const float MIN_DISTANCE = 5.0f;
-    const float MAX_DISTANCE = 20.0f;
+    const float MAX_DISTANCE = 40.0f;
     const float MIN_FOV = 1.0f;
     const float MAX_FOV = 90.0f;
+
+    struct CameraAnimation {
+        bool isAnimating;
+        CameraAnimState state;
+        float startYaw;
+        float targetYaw;
+        float startDistance;
+        float targetDistance;
+        float animationDuration;
+        float currentTime;
+        float rotationSpeed;  // degrees per second
+        
+        CameraAnimation() :
+            isAnimating(false),
+            state(CameraAnimState::NONE),
+            startYaw(45.0f),
+            targetYaw(45.0f),
+            startDistance(10.0f),
+            targetDistance(10.0f),
+            animationDuration(1.0f),
+            currentTime(0.0f),
+            rotationSpeed(0.0f)
+        {}
+    };
+
+    CameraAnimation cameraAnim;
 
 public: 
     Camera(float initialDistance = 10.0f, 
@@ -131,10 +162,78 @@ public:
 
     // Reset camera to default position
     void reset() {
-        distance = 10.0f;
+        distance = 20.0f;
         pitch = 30.0f;
         yaw = 45.0f;
         fov = 45.0f;
+    }
+
+    float getMaxDistance() const { return MAX_DISTANCE; }
+
+    void startCameraAnimation(float cubeDuration) {
+        cameraAnim.isAnimating = true;
+        cameraAnim.state = CameraAnimState::ZOOM_OUT;
+        
+        // Reset camera position
+        pitch = 25.0f;
+        yaw = 45.0f;
+        distance = 10.0f;
+        
+        // Store starting values
+        cameraAnim.startYaw = yaw;
+        cameraAnim.startDistance = distance;
+        
+        // Set target values
+        cameraAnim.targetDistance = 25.0f;  // Zoom out to this distance
+        cameraAnim.targetYaw = yaw + 360.0f;  // Complete one rotation
+        
+        // Set durations
+        cameraAnim.animationDuration = 1.0f;  // Zoom out takes 1 second
+        cameraAnim.currentTime = 0.0f;
+        
+        // Calculate rotation speed for cube animation duration
+        cameraAnim.rotationSpeed = 360.0f / cubeDuration;  // Complete 360° during cube animation
+    }
+
+    void updateCameraAnimation(float deltaTime) {
+        if (!cameraAnim.isAnimating) return;
+
+        cameraAnim.currentTime += deltaTime;
+
+        switch (cameraAnim.state) {
+            case CameraAnimState::ZOOM_OUT:
+                {
+                    float t = cameraAnim.currentTime / cameraAnim.animationDuration;
+                    if (t >= 1.0f) {
+                        distance = cameraAnim.targetDistance;
+                        cameraAnim.state = CameraAnimState::ROTATING;
+                        cameraAnim.currentTime = 0.0f;
+                    } else {
+                        // Smooth zoom out using ease-out function
+                        float easeT = 1.0f - (1.0f - t) * (1.0f - t);
+                        distance = glm::mix(cameraAnim.startDistance, 
+                                         cameraAnim.targetDistance, 
+                                         easeT);
+                    }
+                }
+                break;
+
+            case CameraAnimState::ROTATING:
+                // Rotate at constant speed
+                yaw += cameraAnim.rotationSpeed * deltaTime;
+                if (yaw >= cameraAnim.targetYaw) {
+                    yaw = cameraAnim.startYaw;  // Reset to starting angle
+                    cameraAnim.isAnimating = false;
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    bool isAnimating() const {
+        return cameraAnim.isAnimating;
     }
 };
 

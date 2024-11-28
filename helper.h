@@ -13,12 +13,17 @@
 #include <filesystem>
 #include <fstream>
 #include "stb_image.h"	// libreria para cargar imagenes
+#include <queue>
+#include "vertex.h"
+#include <deque>
 
 
 // Matrix locations
 GLint viewLoc;
 GLint projLoc;
 GLint modelLoc;
+GLint viewLocSB;
+GLint projLocSB;
 
 float toRadians(float degrees) {
     return degrees * (M_PI / 180.0f);
@@ -290,5 +295,14 @@ float normalizeAngle(float angle) {
     while (angle < -180.0f) angle += 360.0f;
     return angle;
 }
+
+glm::vec3 getCubeCenter(const std::vector<vec3>& vertices) {
+    glm::vec3 sum(0.0f);
+    for (const auto& v : vertices) {
+        sum += glm::vec3(v.getX(), v.getY(), v.getZ());
+    }
+    return sum / static_cast<float>(vertices.size());
+}
+
 
 #endif // HELPER_H_
